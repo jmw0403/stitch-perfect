@@ -453,6 +453,66 @@ stitch marks — wallet bodies, T-card slots, trapezoidal dividers, etc.
 - [ ] Page size selector: A4 (210×297mm), Letter (216×279mm), A3 (297×420mm)
 - [ ] Visual only — does not affect the stitch math
 
+### Phase 3.65 — Prebuilt Shape Templates
+
+Common leather pattern pieces appear in almost every project. Rather than
+constructing them from scratch with the polygon tool, these templates drop
+a fully configured shape onto the canvas. All parameters are live-editable
+via named handles; stitch states are pre-wired to the typical use case.
+
+---
+
+#### T-Pocket (card slot)
+
+The defining piece of a bifold wallet card section. Seen on every Atelier
+Grinda-style bifold (ref PDF pages 2/7/12/17/22).
+
+```
+┌────┬──────────────────────┬────┐  top width (W)
+│    │                      │    │  T-bar height (Ht)
+├────┘                      └────┤  T-shoulder step
+ \                              /   slant angle (α)
+  \                            /
+   └────────────────────────────┘  bottom stitch seam
+```
+
+**Four named parameters (all drag-adjustable via handles):**
+
+| Handle | Controls | Derived value |
+|---|---|---|
+| Top-edge width handle | Overall width W | — |
+| T-shoulder handle (L or R step) | T-bar height Ht | Short vert stitch run length |
+| Bottom-corner handle | Slant angle α | Bottom width = W − 2·Ht·tan(α) |
+| Bottom-midpoint handle | Overall height H | Slant run length |
+
+**Pre-wired stitch states:**
+- Top edge → **hidden** (pocket mouth, no stitching)
+- T-bar left side → **stitched** (short vertical run, length = Ht)
+- T-bar right side → **stitched** (short vertical run, mirrored)
+- Slant sides (L and R) → **open** (cut edge, no marks)
+- Bottom edge → **stitched** (seam to wallet body)
+
+**Stitch count constraint:**
+Left and right T-bar runs must have the same count (symmetric). Ht snaps
+to nearest whole-stitch multiple. Bottom snaps independently.
+
+**Interaction:**
+- [ ] Drop from a "Templates" sub-section in the Shapes tab (or right-click
+      canvas → Insert Template → T-Pocket)
+- [ ] On drop: shape appears centred on canvas with default dimensions
+      (e.g. W=100mm, H=70mm, Ht=15mm, α=20°)
+- [ ] Named handles visible when selected — drag any handle to reshape live
+- [ ] Piece tab shows all four parameters as editable fields
+- [ ] Flip H mirrors the piece (creates the right-hand counterpart)
+- [ ] Stitch states editable per-edge as with any polygon
+
+**Future templates (same pattern — parameterised prebuilts):**
+- Card window (rectangular cutout with stitched surround)
+- Bill divider (flat trapezoid, no stitching)
+- Gusset strip (long narrow rect, 2-side or 4-side stitch)
+- D-ring slot (small rect with one stitched end)
+- Zipper pocket (rect with zipper-edge treatment)
+
 ### Phase 4 — Export
 - [ ] `ui/export.js` — SVG download (stitch line + cut line + marks)
 - [ ] Print layout: page border visible, pieces arranged inside, export to scale
