@@ -132,6 +132,47 @@ export function toggleSelectedEdge(side) {
   _toggleEdge(_selected, side);
 }
 
+// Returns a deep copy of the selected rect's data for clipboard use.
+export function copySelectedRect() {
+  if (!_selected) return null;
+  return {
+    x: _selected.x, y: _selected.y,
+    w: _selected.w, h: _selected.h,
+    edges: { ..._selected.edges },
+  };
+}
+
+// Paste a previously copied rect, offset by `pitchMm` diagonally.
+export function pasteRect(data, pitchMm) {
+  const rect = {
+    x: data.x + pitchMm, y: data.y + pitchMm,
+    w: data.w, h: data.h,
+    edges: { ...data.edges },
+    items: [],
+  };
+  rect.items = _renderRect(rect);
+  _rects.push(rect);
+  _deselectRect();
+  _selectRect(rect);
+  _onChange();
+}
+
+// Flip the selected rect horizontally (mirror across its vertical centre axis).
+// Edge L↔R swap; geometry unchanged (still a rectangle, same size).
+export function flipSelectedRect(axis) {
+  if (!_selected) return;
+  const e = _selected.edges;
+  if (axis === 'h') {
+    [e.left, e.right] = [e.right, e.left];
+  } else {
+    [e.top, e.bottom] = [e.bottom, e.top];
+  }
+  _selected.items.forEach(i => i.remove());
+  _selected.items = _renderRect(_selected);
+  _showHandles(_selected);
+  _onChange();
+}
+
 export function getRectStats() {
   const { pitch } = getParams();
   let stitches = 0, marks = 0;

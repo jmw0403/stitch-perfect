@@ -7,6 +7,7 @@ import Clipper2Factory from '../vendor/clipper2z.js';
 import { initControls, getParams, onParamsChange } from './controls.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
+         copySelectedRect, pasteRect, flipSelectedRect,
          getRectSnapPoints } from './rect-tool.js';
 import { px, toMm, createMark } from './render.js';
 
@@ -377,9 +378,10 @@ let _fhDragOrigPts     = null; // original pts snapshot
 function _selectFreehand(piece) {
   _deselectFreehand();
   _selFreehand = piece;
-  piece.items[0].strokeColor = '#5bb3f5'; // highlight stitch line
+  piece.items[0].strokeColor = '#5bb3f5';
   piece.items[0].strokeWidth = 1.5;
   updateSelInfo();
+  _syncEditBtns();
 }
 
 function _deselectFreehand() {
@@ -388,6 +390,7 @@ function _deselectFreehand() {
   _selFreehand.items[0].strokeWidth = 1;
   _selFreehand = null;
   updateSelInfo();
+  _syncEditBtns();
 }
 
 function _findFreehandAt(point) {
@@ -443,6 +446,85 @@ document.querySelectorAll('#tool-btns [data-tool]').forEach(btn => {
     }
     setTool(name);
   });
+});
+
+// ── Copy / Paste / Flip ───────────────────────────────────────────────────────
+
+let _clipboard = null; // { type: 'rect'|'freehand', data }
+
+function _copySelected() {
+  const ri = getSelectedRect();
+  if (ri) { _clipboard = { type: 'rect', data: ri }; return; }
+  if (_selFreehand) {
+    _clipboard = { type: 'freehand', data: _selFreehand.pts.map(p => ({...p})) };
+  }
+}
+
+function _pasteClipboard() {
+  if (!_clipboard) return;
+  const { pitch } = getParams();
+  if (_clipboard.type === 'rect') {
+    pasteRect(_clipboard.data, pitch);
+    updateStatus();
+    updateSelInfo();
+  } else if (_clipboard.type === 'freehand') {
+    const offsetPts = _clipboard.data.map(p => ({ x: p.x + pitch, y: p.y + pitch }));
+    const { items, count, markCount, snappedPts } = renderPiece(offsetPts);
+    _deselectFreehand();
+    const newPiece = { pts: offsetPts, items, count, markCount, snappedPts };
+    pieces.push(newPiece);
+    _selectFreehand(newPiece);
+    deduplicateCorners();
+    updateStatus();
+  }
+}
+
+function _flipSelected(axis) {
+  const ri = getSelectedRect();
+  if (ri) { flipSelectedRect(axis); updateSelInfo(); return; }
+  if (_selFreehand) {
+    const p = _selFreehand;
+    // Mirror freehand pts across the piece's own centre
+    const cx = (p.pts[0].x + p.pts[p.pts.length - 1].x) / 2;
+    const cy = (p.pts[0].y + p.pts[p.pts.length - 1].y) / 2;
+    const flipped = p.pts.map(pt => axis === 'h'
+      ? { x: 2 * cx - pt.x, y: pt.y }
+      : { x: pt.x, y: 2 * cy - pt.y });
+    p.items.forEach(item => item.remove());
+    const { items, count, markCount, snappedPts } = renderPiece(flipped);
+    if (_selFreehand === p) { items[0].strokeColor = '#5bb3f5'; items[0].strokeWidth = 1.5; }
+    p.pts = flipped; p.items = items; p.count = count;
+    p.markCount = markCount; p.snappedPts = snappedPts;
+    deduplicateCorners();
+    updateStatus(); updateSelInfo();
+  }
+}
+
+// Wire Shapes tab Edit buttons
+document.getElementById('btn-copy')  ?.addEventListener('click', _copySelected);
+document.getElementById('btn-paste') ?.addEventListener('click', _pasteClipboard);
+document.getElementById('btn-flip-h')?.addEventListener('click', () => _flipSelected('h'));
+document.getElementById('btn-flip-v')?.addEventListener('click', () => _flipSelected('v'));
+
+// Enable/disable edit buttons based on selection
+function _syncEditBtns() {
+  const hasSel = !!getSelectedRect() || !!_selFreehand;
+  const hasCB  = !!_clipboard;
+  ['btn-copy', 'btn-flip-h', 'btn-flip-v'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.disabled = !hasSel;
+  });
+  const pasteEl = document.getElementById('btn-paste');
+  if (pasteEl) pasteEl.disabled = !hasCB;
+}
+_syncEditBtns();
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  const ctrl = e.ctrlKey || e.metaKey;
+  if (ctrl && e.key === 'c') { _copySelected();    _syncEditBtns(); e.preventDefault(); }
+  if (ctrl && e.key === 'v') { _pasteClipboard();  _syncEditBtns(); e.preventDefault(); }
+  if (ctrl && e.key === 'd') { _copySelected(); _pasteClipboard(); _syncEditBtns(); e.preventDefault(); } // duplicate
 });
 
 // ── Freehand drawing tool ─────────────────────────────────────────────────────
