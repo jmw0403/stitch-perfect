@@ -1,7 +1,7 @@
-# Leather Stitch Tool — Project Plan
+# StitchPerfect — Project Plan
 
-**Project folder:** `C:\Users\John Wilkerson\Projects\leather-stitch-tool`
-**Repo:** to be created on GitHub, deployed to Vercel
+**App name:** StitchPerfect &nbsp;·&nbsp; **Internal folder:** `leather-stitch-tool`
+**Repo:** to be created on GitHub as `stitch-perfect`, deployed to Vercel
 **Reference apps:** sequencediagram.org, Mermaid live editor (browser-based, no backend)
 
 ---

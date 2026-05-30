@@ -22,7 +22,6 @@ html, body {
   position: relative;
   background: #f7f5f0;
   overflow: hidden;
-  /* Fine 1px gap-crosshair — falls back to system crosshair if SVG cursor unsupported */
   cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='1' x2='10' y2='8' stroke='%23444' stroke-width='1'/%3E%3Cline x1='10' y1='12' x2='10' y2='19' stroke='%23444' stroke-width='1'/%3E%3Cline x1='1' y1='10' x2='8' y2='10' stroke='%23444' stroke-width='1'/%3E%3Cline x1='12' y1='10' x2='19' y2='10' stroke='%23444' stroke-width='1'/%3E%3C/svg%3E") 10 10, crosshair;
 }
 
@@ -39,46 +38,116 @@ html, body {
   transform: translateX(-50%);
   background: rgba(0,0,0,0.45);
   color: #eee;
-  font-size: 12px;
+  font-size: 11px;
   padding: 5px 12px;
   border-radius: 4px;
   pointer-events: none;
   white-space: nowrap;
 }
 
-/* ── Side panel ── */
+#dim-label {
+  display: none;
+  position: absolute;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  padding: 3px 8px;
+  border-radius: 3px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+}
+
+/* ── Panel shell ── */
 
 #panel {
-  width: 220px;
+  width: 240px;
+  min-width: 180px;
+  max-width: 420px;
   flex-shrink: 0;
   background: #1a1a1a;
-  border-left: 1px solid #333;
-  padding: 20px 16px;
+  border-left: 1px solid #2a2a2a;
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* ── Resize handle ── */
+
+#panel-resize {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 5px;
+  cursor: col-resize;
+  z-index: 20;
+}
+
+#panel-resize:hover,
+#panel-resize.dragging {
+  background: rgba(44, 123, 182, 0.3);
+}
+
+/* ── Tab bar ── */
+
+#tab-bar {
+  display: flex;
+  flex-shrink: 0;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.tab-btn {
+  flex: 1;
+  padding: 9px 4px;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: #555;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+
+.tab-btn:hover { color: #999; }
+
+.tab-btn.active {
+  color: #2c7bb6;
+  border-bottom-color: #2c7bb6;
+}
+
+/* ── Tab panes ── */
+
+.tab-pane {
+  display: none;
+  flex: 1;
+  flex-direction: column;
+  gap: 18px;
+  padding: 14px 12px;
   overflow-y: auto;
 }
 
-#panel h2 {
-  font-size: 13px;
-  font-weight: 600;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-  color: #888;
+.tab-pane.active {
+  display: flex;
 }
 
-section {
+/* ── Pane sections ── */
+
+.pane-section {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 6px;
 }
 
-.section-label {
-  font-size: 11px;
+.pane-label {
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #666;
+  letter-spacing: 0.08em;
+  color: #555;
+  margin-bottom: 2px;
 }
 
 .unit-note {
@@ -87,7 +156,7 @@ section {
   margin-top: 2px;
 }
 
-/* ── Button group ── */
+/* ── Button groups ── */
 
 .btn-group {
   display: flex;
@@ -114,7 +183,7 @@ section {
   transition: background 0.1s, color 0.1s;
 }
 
-.btn-group button:hover {
+.btn-group button:hover:not(:disabled) {
   background: #303030;
   color: #ccc;
 }
@@ -123,6 +192,16 @@ section {
   background: #2c7bb6;
   color: #fff;
   border-color: #2c7bb6;
+}
+
+.btn-group button:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+.btn-group small {
+  font-size: 9px;
+  opacity: 0.6;
 }
 
 /* ── Range slider ── */
@@ -134,7 +213,7 @@ input[type=range] {
   border-radius: 2px;
   background: #333;
   outline: none;
-  margin: 6px 0 2px;
+  margin: 4px 0 2px;
 }
 
 input[type=range]::-webkit-slider-thumb {
@@ -154,25 +233,238 @@ input[type=range]::-webkit-slider-thumb {
   color: #444;
 }
 
-hr {
+/* ── Toggle rows (Stitch + View tabs) ── */
+
+.toggle-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 3px 0;
+}
+
+.toggle-row span {
+  font-size: 12px;
+  color: #aaa;
+}
+
+.toggle-switch {
+  width: 34px;
+  height: 18px;
+  border-radius: 9px;
+  background: #333;
   border: none;
-  border-top: 1px solid #2a2a2a;
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition: background 0.15s;
 }
 
-#status {
-  font-size: 13px;
-  color: #7db8e8;
-  min-height: 18px;
+.toggle-switch.active {
+  background: #2c7bb6;
 }
 
-/* ── Selection dimensions panel ── */
+.toggle-switch::after {
+  content: '';
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #fff;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.15s;
+}
 
-#sel-info {
+.toggle-switch.active::after {
+  transform: translateX(16px);
+}
+
+/* ── Select ── */
+
+select {
+  width: 100%;
+  background: #252525;
+  color: #aaa;
+  border: 1px solid #333;
+  border-radius: 4px;
+  padding: 5px 6px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+/* ── Export buttons ── */
+
+.export-btn {
+  display: block;
+  width: 100%;
+  padding: 7px;
+  margin-top: 4px;
+  background: #252525;
+  color: #aaa;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  text-align: center;
+  transition: background 0.1s, color 0.1s;
+}
+
+.export-btn:hover:not(:disabled) {
+  background: #2c7bb6;
+  color: #fff;
+  border-color: #2c7bb6;
+}
+
+.export-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+
+/* ── Piece tab ── */
+
+.piece-empty {
+  font-size: 12px;
+  color: #444;
+  text-align: center;
+  padding: 24px 0;
+}
+
+.piece-section {
   display: flex;
   flex-direction: column;
   gap: 5px;
-  min-height: 0;
+  padding-bottom: 12px;
+  border-bottom: 1px solid #222;
 }
+
+.piece-section:last-child {
+  border-bottom: none;
+}
+
+.piece-section-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #555;
+  margin-bottom: 2px;
+}
+
+.piece-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+}
+
+.piece-field {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+}
+
+.piece-field-label {
+  font-size: 9px;
+  text-transform: uppercase;
+  color: #555;
+  letter-spacing: 0.05em;
+}
+
+.piece-field-val {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ddd;
+  font-variant-numeric: tabular-nums;
+}
+
+.piece-field-val.secondary {
+  font-size: 12px;
+  font-weight: 400;
+  color: #888;
+}
+
+/* Edge buttons in Piece tab */
+
+.edge-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  grid-template-rows: auto auto auto;
+  gap: 4px;
+}
+
+.edge-btn {
+  padding: 4px 6px;
+  background: #252525;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 10px;
+  font-family: inherit;
+  cursor: pointer;
+  color: #888;
+  white-space: nowrap;
+  transition: background 0.1s;
+}
+
+.edge-btn:hover { background: #303030; }
+
+.edge-btn.stitched  { background: #1a3d5c; color: #5bb3f5; border-color: #2c7bb6; }
+.edge-btn.open      { background: #3d2a00; color: #c8882a; border-color: #8a5f00; }
+.edge-btn.hidden    { background: #1e1e1e; color: #444;    border-color: #2a2a2a; }
+
+.edge-spacer { /* empty grid cell */ }
+
+.edge-legend {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-size: 9px;
+  margin-top: 2px;
+}
+
+.edge-legend span { display: flex; align-items: center; gap: 3px; }
+.legend-dot {
+  width: 8px; height: 8px; border-radius: 1px; flex-shrink: 0;
+}
+.legend-dot.stitched { background: #2c7bb6; }
+.legend-dot.open     { background: #8a5f00; }
+.legend-dot.hidden   { background: #333; }
+
+.mate-placeholder {
+  font-size: 11px;
+  color: #444;
+  font-style: italic;
+}
+
+.mate-assign-btn {
+  padding: 4px 8px;
+  background: none;
+  border: 1px solid #333;
+  border-radius: 4px;
+  color: #555;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  margin-top: 4px;
+}
+
+/* ── Status bar ── */
+
+#status-bar {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 12px;
+  border-top: 1px solid #222;
+  background: #141414;
+  font-size: 11px;
+  min-height: 30px;
+}
+
+#status       { color: #7db8e8; }
+#status-pitch { color: #555; font-variant-numeric: tabular-nums; }
+
+/* ── Selection dimensions (inside Piece tab, built by JS) ── */
 
 .sel-row {
   display: flex;
@@ -194,20 +486,4 @@ hr {
   color: #ddd;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
-}
-
-/* ── Dimension label (rect draw / resize) ── */
-
-#dim-label {
-  display: none;
-  position: absolute;
-  background: rgba(0, 0, 0, 0.6);
-  color: #fff;
-  font-size: 11px;
-  font-family: system-ui, sans-serif;
-  padding: 3px 8px;
-  border-radius: 3px;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 10;
 }

@@ -116,10 +116,20 @@ export function redrawAllRects() {
   if (_selected) _showHandles(_selected);
 }
 
-// Returns a snapshot of the selected rect for the dimensions panel, or null.
+// Returns a snapshot of the selected rect (including edge states) for the Piece tab.
 export function getSelectedRect() {
   if (!_selected) return null;
-  return { x: _selected.x, y: _selected.y, w: _selected.w, h: _selected.h };
+  return {
+    x: _selected.x, y: _selected.y,
+    w: _selected.w, h: _selected.h,
+    edges: { ..._selected.edges },
+  };
+}
+
+// Toggle a named edge of the selected rect — called from the Piece tab edge buttons.
+export function toggleSelectedEdge(side) {
+  if (!_selected) return;
+  _toggleEdge(_selected, side);
 }
 
 export function getRectStats() {
@@ -151,40 +161,45 @@ function _edgePts(rect, side) {
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 function _renderRect(rect) {
-  const { pitch, margin, markType } = getParams();
+  const { pitch, margin, markType, showStitchLine, showCutOutline } = getParams();
   const { x, y, w, h } = rect;
   const items = [];
 
-  // Cut outline — closed polygon expanded by margin on all sides
-  const closedPts = [
-    { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }, { x, y },
-  ];
-  _layers.cutLayer.activate();
-  for (const ring of offsetPolyline(closedPts, margin, true, { joinType: 'miter' })) {
-    items.push(new paper.Path({
-      segments: ring.map(p => new paper.Point(px(p.x), px(p.y))),
-      closed: true,
-      strokeColor: '#aaa',
-      strokeWidth: 0.75,
-      dashArray: [4, 3],
-    }));
+  // Cut outline — gated by showCutOutline
+  if (showCutOutline) {
+    const closedPts = [
+      { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }, { x, y },
+    ];
+    _layers.cutLayer.activate();
+    for (const ring of offsetPolyline(closedPts, margin, true, { joinType: 'miter' })) {
+      items.push(new paper.Path({
+        segments: ring.map(p => new paper.Point(px(p.x), px(p.y))),
+        closed: true,
+        strokeColor: '#aaa',
+        strokeWidth: 0.75,
+        dashArray: [4, 3],
+      }));
+    }
   }
 
   // Per-edge: stitch line + marks (stitched) or dim dashed line (open)
   for (const side of ['top', 'right', 'bottom', 'left']) {
     const pts = _edgePts(rect, side);
-    _layers.stitchLayer.activate();
 
     if (rect.edges[side] === 'stitched') {
-      items.push(new paper.Path({
-        segments: pts.map(p => new paper.Point(px(p.x), px(p.y))),
-        strokeColor: '#2c7bb6',
-        strokeWidth: 1,
-      }));
+      if (showStitchLine) {
+        _layers.stitchLayer.activate();
+        items.push(new paper.Path({
+          segments: pts.map(p => new paper.Point(px(p.x), px(p.y))),
+          strokeColor: '#2c7bb6',
+          strokeWidth: 1,
+        }));
+      }
       _layers.markLayer.activate();
       const { marks } = placeMarks(pts, pitch);
       for (const m of marks) items.push(createMark(m, markType));
     } else if (rect.edges[side] === 'open') {
+      _layers.stitchLayer.activate();
       items.push(new paper.Path({
         segments: pts.map(p => new paper.Point(px(p.x), px(p.y))),
         strokeColor: '#666',

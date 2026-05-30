@@ -6,7 +6,7 @@ import { initOffset, offsetPolyline } from '../engine/offset.js';
 import Clipper2Factory from '../vendor/clipper2z.js';
 import { initControls, getParams, onParamsChange } from './controls.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
-         redrawAllRects, getRectStats, getSelectedRect,
+         redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
          getRectSnapPoints } from './rect-tool.js';
 import { px, toMm, createMark } from './render.js';
 
@@ -70,42 +70,44 @@ function snapPolyline(pts, targetLength) {
 }
 
 function renderPiece(pts) {
-  const { pitch, margin, markType, showDimensions } = getParams();
+  const { pitch, margin, markType, showDimensions, showStitchLine, showCutOutline } = getParams();
   const items = [];
 
-  // Compute raw arc length to find snapped length
   let rawLen = 0;
   for (let i = 1; i < pts.length; i++) {
     const dx = pts[i].x - pts[i-1].x, dy = pts[i].y - pts[i-1].y;
     rawLen += Math.sqrt(dx*dx + dy*dy);
   }
   const { snappedLength } = snapToStitches(rawLen, pitch);
-
-  // Render the stitch line at the snapped length so dimension flex is visible
   const snappedPts = snapPolyline(pts, snappedLength);
 
-  stitchLayer.activate();
-  items.push(new paper.Path({
-    segments: snappedPts.map(p => new paper.Point(px(p.x), px(p.y))),
-    strokeColor: '#2c7bb6',
-    strokeWidth: 1,
-  }));
+  // Stitch line (gated by showStitchLine)
+  if (showStitchLine) {
+    stitchLayer.activate();
+    items.push(new paper.Path({
+      segments: snappedPts.map(p => new paper.Point(px(p.x), px(p.y))),
+      strokeColor: '#2c7bb6',
+      strokeWidth: 1,
+    }));
+  }
 
-  // Use snappedPts for marks so first and last marks land exactly on the line endpoints
+  // Marks always shown (they are what matters for punching)
   markLayer.activate();
   const { marks, count } = placeMarks(snappedPts, pitch);
   for (const m of marks) items.push(createMark(m, markType));
 
-  // Cut line uses snappedPts too so the offset matches the visible stitch line
-  cutLayer.activate();
-  for (const ring of offsetPolyline(snappedPts, margin, false)) {
-    items.push(new paper.Path({
-      segments: ring.map(p => new paper.Point(px(p.x), px(p.y))),
-      closed: true,
-      strokeColor: '#aaa',
-      strokeWidth: 0.75,
-      dashArray: [4, 3],
-    }));
+  // Cut outline (gated by showCutOutline)
+  if (showCutOutline) {
+    cutLayer.activate();
+    for (const ring of offsetPolyline(snappedPts, margin, false)) {
+      items.push(new paper.Path({
+        segments: ring.map(p => new paper.Point(px(p.x), px(p.y))),
+        closed: true,
+        strokeColor: '#aaa',
+        strokeWidth: 0.75,
+        dashArray: [4, 3],
+      }));
+    }
   }
 
   // Dimension label — shown only when showDimensions is on
@@ -152,18 +154,24 @@ onParamsChange(redrawAll);
 // ── Status bar ────────────────────────────────────────────────────────────────
 
 function updateStatus() {
-  const el = document.getElementById('status');
+  const statusEl = document.getElementById('status');
+  const pitchEl  = document.getElementById('status-pitch');
   const rs = getRectStats();
   const totalPieces   = pieces.length + rs.count;
 
-  if (totalPieces === 0) { el.textContent = ''; return; }
+  if (totalPieces === 0) {
+    statusEl.textContent = '';
+  } else {
+    const totalStitches = pieces.reduce((s, p) => s + p.count, 0)    + rs.stitches;
+    const totalMarks    = pieces.reduce((s, p) => s + p.markCount, 0) + rs.marks;
+    statusEl.textContent = (totalPieces === 1 && pieces.length === 1)
+      ? `Line – ${pieces[0].count} stitches`
+      : `${totalPieces} piece${totalPieces > 1 ? 's' : ''} · ${totalStitches} stitches`;
+  }
 
-  const totalStitches = pieces.reduce((s, p) => s + p.count, 0)    + rs.stitches;
-  const totalMarks    = pieces.reduce((s, p) => s + p.markCount, 0) + rs.marks;
-
-  el.textContent = (totalPieces === 1 && pieces.length === 1)
-    ? `${pieces[0].count} stitch${pieces[0].count === 1 ? '' : 'es'} · ${pieces[0].markCount} marks`
-    : `${totalPieces} piece${totalPieces > 1 ? 's' : ''} · ${totalStitches} stitches · ${totalMarks} marks`;
+  // Right side: always shows current pitch
+  const { pitch } = getParams();
+  if (pitchEl) pitchEl.textContent = `pitch ${pitch} mm`;
 }
 
 // ── Shared-corner deduplication ──────────────────────────────────────────────
@@ -174,11 +182,19 @@ function updateStatus() {
 const CORNER_TOL_MM = 0.15;
 
 function deduplicateCorners() {
-  // Reset all endpoint marks to visible first
-  for (const p of pieces) {
+  // Respect the cornerDedup toggle
+  const reset = (p) => {
     if (p.items[1])           p.items[1].visible           = true;
     if (p.items[p.markCount]) p.items[p.markCount].visible = true;
+  };
+
+  if (!getParams().cornerDedup) {
+    pieces.forEach(reset);
+    return;
   }
+
+  // Reset all endpoint marks to visible first
+  pieces.forEach(reset);
 
   for (let i = 0; i < pieces.length; i++) {
     const pi  = pieces[i];
@@ -208,35 +224,108 @@ function deduplicateCorners() {
   }
 }
 
-// ── Dimensions panel ─────────────────────────────────────────────────────────
+// ── Piece tab ─────────────────────────────────────────────────────────────────
+
+function _edgeBtnClass(state) {
+  return `edge-btn ${state}`;
+}
 
 function updateSelInfo() {
-  const el = document.getElementById('sel-info');
+  const el = document.getElementById('piece-content');
+  if (!el) return;
   const { margin, pitch } = getParams();
 
-  // Rect selected?
+  // ── Rect selected ──────────────────────────────────────────────────────────
   const ri = getSelectedRect();
   if (ri) {
-    el.innerHTML =
-      `<div class="sel-row"><span class="sel-label">Stitch area</span>`+
-      `<span class="sel-val">${ri.w.toFixed(1)} × ${ri.h.toFixed(1)} mm</span></div>`+
-      `<div class="sel-row"><span class="sel-label">Cut piece</span>`+
-      `<span class="sel-val">${(ri.w + 2*margin).toFixed(1)} × ${(ri.h + 2*margin).toFixed(1)} mm</span></div>`;
+    const { count: wCount } = _stitchCount(ri.w, pitch);
+    const { count: hCount } = _stitchCount(ri.h, pitch);
+    const e = ri.edges;
+
+    el.innerHTML = `
+      <div class="piece-section">
+        <div class="piece-section-label">Stitch area</div>
+        <div class="piece-grid">
+          <div class="piece-field"><div class="piece-field-label">W</div><div class="piece-field-val">${ri.w.toFixed(1)} mm</div></div>
+          <div class="piece-field"><div class="piece-field-label">H</div><div class="piece-field-val">${ri.h.toFixed(1)} mm</div></div>
+          <div class="piece-field"><div class="piece-field-label">Stitches W</div><div class="piece-field-val secondary">${wCount}</div></div>
+          <div class="piece-field"><div class="piece-field-label">Stitches H</div><div class="piece-field-val secondary">${hCount}</div></div>
+        </div>
+      </div>
+      <div class="piece-section">
+        <div class="piece-section-label">Cut piece</div>
+        <div class="piece-grid">
+          <div class="piece-field"><div class="piece-field-label">W</div><div class="piece-field-val secondary">${(ri.w + 2*margin).toFixed(1)} mm</div></div>
+          <div class="piece-field"><div class="piece-field-label">H</div><div class="piece-field-val secondary">${(ri.h + 2*margin).toFixed(1)} mm</div></div>
+        </div>
+      </div>
+      <div class="piece-section">
+        <div class="piece-section-label">Edges &nbsp;<small style="color:#444;font-size:9px">click to cycle state</small></div>
+        <div class="edge-grid">
+          <div class="edge-spacer"></div>
+          <button class="${_edgeBtnClass(e.top)}"    data-piece-edge="top">↑ Top</button>
+          <div class="edge-spacer"></div>
+          <button class="${_edgeBtnClass(e.left)}"   data-piece-edge="left">← Left</button>
+          <div class="edge-spacer"></div>
+          <button class="${_edgeBtnClass(e.right)}"  data-piece-edge="right">→ Right</button>
+          <div class="edge-spacer"></div>
+          <button class="${_edgeBtnClass(e.bottom)}" data-piece-edge="bottom">↓ Bottom</button>
+          <div class="edge-spacer"></div>
+        </div>
+        <div class="edge-legend">
+          <span><div class="legend-dot stitched"></div> stitched</span>
+          <span><div class="legend-dot open"></div> open</span>
+          <span><div class="legend-dot hidden"></div> hidden</span>
+        </div>
+      </div>
+      <div class="piece-section">
+        <div class="piece-section-label">Position</div>
+        <div class="piece-grid">
+          <div class="piece-field"><div class="piece-field-label">X</div><div class="piece-field-val secondary">${ri.x.toFixed(1)} mm</div></div>
+          <div class="piece-field"><div class="piece-field-label">Y</div><div class="piece-field-val secondary">${ri.y.toFixed(1)} mm</div></div>
+        </div>
+      </div>
+      <div class="piece-section">
+        <div class="piece-section-label">Mate</div>
+        <div class="mate-placeholder">No mate assigned</div>
+        <button class="mate-assign-btn" disabled>Assign mate edge…</button>
+      </div>`;
+
+    // Wire edge buttons
+    el.querySelectorAll('[data-piece-edge]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        toggleSelectedEdge(btn.dataset.pieceEdge);
+      });
+    });
     return;
   }
 
-  // Freehand piece selected?
+  // ── Freehand selected ──────────────────────────────────────────────────────
   if (_selFreehand) {
-    const snapped = (_selFreehand.count * pitch).toFixed(1);
-    el.innerHTML =
-      `<div class="sel-row"><span class="sel-label">Length</span>`+
-      `<span class="sel-val">${snapped} mm</span></div>`+
-      `<div class="sel-row"><span class="sel-label">Stitches</span>`+
-      `<span class="sel-val">${_selFreehand.count}</span></div>`;
+    const p   = _selFreehand;
+    const len = (p.count * pitch).toFixed(1);
+    const p0  = p.pts[0], p1 = p.pts[p.pts.length - 1];
+    const angle = (Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI).toFixed(1);
+    el.innerHTML = `
+      <div class="piece-section">
+        <div class="piece-section-label">Line</div>
+        <div class="piece-grid">
+          <div class="piece-field"><div class="piece-field-label">Length</div><div class="piece-field-val">${len} mm</div></div>
+          <div class="piece-field"><div class="piece-field-label">Stitches</div><div class="piece-field-val">${p.count}</div></div>
+          <div class="piece-field"><div class="piece-field-label">Angle</div><div class="piece-field-val secondary">${angle}°</div></div>
+          <div class="piece-field"><div class="piece-field-label">Marks</div><div class="piece-field-val secondary">${p.markCount}</div></div>
+        </div>
+      </div>`;
     return;
   }
 
-  el.innerHTML = '';
+  el.innerHTML = '<div class="piece-empty">Select a piece to see its properties</div>';
+}
+
+// Helper: stitch count for a dimension
+function _stitchCount(dim, pitch) {
+  const count = Math.max(1, Math.round(dim / pitch));
+  return { count };
 }
 
 // ── Snap helpers ─────────────────────────────────────────────────────────────

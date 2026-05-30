@@ -3,78 +3,175 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Leather Stitch Tool</title>
+  <title>StitchPerfect</title>
   <link rel="stylesheet" href="styles/app.css">
 </head>
 <body>
   <div id="app">
+
     <div id="canvas-wrap">
       <canvas id="canvas"></canvas>
       <div id="hint">Click to place points &nbsp;·&nbsp; Double-click to finish &nbsp;·&nbsp; Esc to cancel</div>
       <div id="dim-label"></div>
     </div>
+
     <aside id="panel">
-      <h2>Leather Stitch Tool</h2>
+      <!-- Drag handle on left edge to resize panel width -->
+      <div id="panel-resize"></div>
 
-      <section>
-        <div class="section-label">Tool</div>
-        <div class="btn-group" id="tool-btns">
-          <button data-tool="freehand" class="active">✏ Freehand</button>
-          <button data-tool="rect">▭ Rect</button>
+      <!-- ── Tab bar ── -->
+      <nav id="tab-bar">
+        <button class="tab-btn active" data-tab="shapes">Shapes</button>
+        <button class="tab-btn"        data-tab="stitch">Stitch</button>
+        <button class="tab-btn"        data-tab="piece">Piece</button>
+        <button class="tab-btn"        data-tab="view">View</button>
+      </nav>
+
+      <!-- ══════════════ Shapes tab ══════════════ -->
+      <div class="tab-pane active" id="tab-shapes">
+
+        <div class="pane-section">
+          <div class="pane-label">Draw</div>
+          <div class="btn-group" id="tool-btns">
+            <button data-tool="freehand" class="active">Line</button>
+            <button data-tool="rect">Rect</button>
+            <button data-tool="oval"  disabled title="Coming soon">Oval</button>
+            <button data-tool="trap"  disabled title="Coming soon">Trap</button>
+            <button data-tool="poly"  disabled title="Coming soon">Poly</button>
+          </div>
         </div>
-      </section>
 
-      <section>
-        <div class="section-label">Pitch</div>
-        <div class="btn-group" id="pitch-btns">
-          <button data-pitch="3">3</button>
-          <button data-pitch="3.38">3.38</button>
-          <button data-pitch="3.85">3.85</button>
-          <button data-pitch="4" class="active">4</button>
-          <button data-pitch="5">5</button>
-          <button data-pitch="6">6</button>
+        <div class="pane-section">
+          <div class="pane-label">Edit</div>
+          <div class="btn-group col-2">
+            <button id="btn-copy"   disabled>Copy</button>
+            <button id="btn-paste"  disabled>Paste</button>
+            <button id="btn-flip-h" disabled>Flip H</button>
+            <button id="btn-flip-v" disabled>Flip V</button>
+            <button id="btn-fwd"    disabled>Fwd ↑</button>
+            <button id="btn-back"   disabled>Back ↓</button>
+          </div>
         </div>
-        <div class="unit-note">mm between marks</div>
-      </section>
 
-      <section>
-        <div class="section-label">
-          Margin &thinsp;<span id="margin-val">3.0</span> mm
+        <div class="pane-section">
+          <div class="pane-label">Group</div>
+          <div class="btn-group col-2">
+            <button id="btn-group">Group <small>Ctrl+G</small></button>
+            <button id="btn-ungroup" disabled>Ungroup</button>
+          </div>
         </div>
-        <input type="range" id="margin-range" min="1" max="15" step="0.5" value="3">
-        <div class="range-labels"><span>1 mm</span><span>15 mm</span></div>
-      </section>
 
-      <section>
-        <div class="section-label">Mark type</div>
-        <div class="btn-group col-2" id="mark-btns">
-          <button data-mark="hole" class="active">Hole ○</button>
-          <button data-mark="dot">Dot ●</button>
-          <button data-mark="slash-fwd">/ Slash</button>
-          <button data-mark="slash-back">\ Slash</button>
+      </div><!-- /tab-shapes -->
+
+      <!-- ══════════════ Stitch tab ══════════════ -->
+      <div class="tab-pane" id="tab-stitch">
+
+        <div class="pane-section">
+          <div class="pane-label">Pitch</div>
+          <div class="btn-group" id="pitch-btns">
+            <button data-pitch="3">3</button>
+            <button data-pitch="3.38">3.38</button>
+            <button data-pitch="3.85">3.85</button>
+            <button data-pitch="4" class="active">4</button>
+            <button data-pitch="5">5</button>
+            <button data-pitch="6">6</button>
+          </div>
+          <div class="unit-note">mm between marks</div>
         </div>
-      </section>
 
-      <section>
-        <div class="section-label">View</div>
-        <div class="btn-group">
-          <button data-toggle="showDimensions" class="active">⊞ Dimensions</button>
+        <div class="pane-section">
+          <div class="pane-label">Margin &thinsp;<span id="margin-val">3.0</span> mm</div>
+          <input type="range" id="margin-range" min="1" max="15" step="0.5" value="3">
+          <div class="range-labels"><span>1 mm</span><span>15 mm</span></div>
         </div>
-      </section>
 
-      <section>
-        <div class="section-label">Snap</div>
-        <div class="btn-group col-2">
-          <button data-toggle="snapVertices">⌖ Corners</button>
-          <button data-toggle="snapMidpoints">⊕ Midpts</button>
+        <div class="pane-section">
+          <div class="pane-label">Mark type</div>
+          <div class="btn-group col-2" id="mark-btns">
+            <button data-mark="hole" class="active">Hole ○</button>
+            <button data-mark="dot">Dot ●</button>
+            <button data-mark="slash-fwd">/ Slash</button>
+            <button data-mark="slash-back">\ Slash</button>
+          </div>
         </div>
-      </section>
 
-      <hr>
+        <div class="pane-section">
+          <div class="toggle-row">
+            <span>Corner marks</span>
+            <button class="toggle-switch active" data-toggle="cornerMarks"></button>
+          </div>
+          <div class="toggle-row">
+            <span>Corner dedup</span>
+            <button class="toggle-switch active" data-toggle="cornerDedup"></button>
+          </div>
+        </div>
 
-      <div id="sel-info"></div>
+      </div><!-- /tab-stitch -->
 
-      <div id="status"></div>
+      <!-- ══════════════ Piece tab ══════════════ -->
+      <div class="tab-pane" id="tab-piece">
+        <div id="piece-content">
+          <div class="piece-empty">Select a piece to see its properties</div>
+        </div>
+      </div>
+
+      <!-- ══════════════ View tab ══════════════ -->
+      <div class="tab-pane" id="tab-view">
+
+        <div class="pane-section">
+          <div class="pane-label">Show</div>
+          <div class="toggle-row">
+            <span>Dimensions</span>
+            <button class="toggle-switch active" data-toggle="showDimensions"></button>
+          </div>
+          <div class="toggle-row">
+            <span>Cut outline</span>
+            <button class="toggle-switch active" data-toggle="showCutOutline"></button>
+          </div>
+          <div class="toggle-row">
+            <span>Stitch line</span>
+            <button class="toggle-switch active" data-toggle="showStitchLine"></button>
+          </div>
+          <div class="toggle-row">
+            <span>Page border</span>
+            <button class="toggle-switch" data-toggle="showPageBorder"></button>
+          </div>
+        </div>
+
+        <div class="pane-section">
+          <div class="pane-label">Snap</div>
+          <div class="btn-group col-2">
+            <button data-toggle="snapVertices">Corners</button>
+            <button data-toggle="snapMidpoints">Midpoints</button>
+            <button data-toggle="snapGrid"  disabled>Grid</button>
+            <button data-toggle="snapEdges" disabled>Edges</button>
+          </div>
+        </div>
+
+        <div class="pane-section">
+          <div class="pane-label">Page size</div>
+          <select id="page-size">
+            <option value="none">None</option>
+            <option value="a4">A4 &nbsp; 210 × 297 mm</option>
+            <option value="letter">Letter &nbsp; 216 × 279 mm</option>
+            <option value="a3">A3 &nbsp; 297 × 420 mm</option>
+          </select>
+        </div>
+
+        <div class="pane-section">
+          <div class="pane-label">Export</div>
+          <button id="btn-export-svg" class="export-btn">⬇ Download SVG</button>
+          <button id="btn-export-dxf" class="export-btn" disabled>⬇ Download DXF</button>
+        </div>
+
+      </div><!-- /tab-view -->
+
+      <!-- ── Persistent status bar ── -->
+      <div id="status-bar">
+        <span id="status"></span>
+        <span id="status-pitch">pitch 4 mm</span>
+      </div>
+
     </aside>
   </div>
 

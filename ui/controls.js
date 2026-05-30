@@ -3,13 +3,24 @@
 export const VALID_PITCHES = [3, 3.38, 3.85, 4, 5, 6]; // mm
 
 const _state = {
-  pitch: 4,
-  margin: 3,
-  markType: 'hole',
+  pitch:          4,
+  margin:         3,
+  markType:       'hole',
+  // Stitch tab
+  cornerMarks:    true,
+  cornerDedup:    true,
+  // View tab — Show
   showDimensions: true,
+  showCutOutline: true,
+  showStitchLine: true,
+  showPageBorder: false,
+  // View tab — Snap
   snapVertices:   false,
   snapMidpoints:  false,
+  snapGrid:       false,
+  snapEdges:      false,
 };
+
 const _listeners = [];
 
 function _notify() {
@@ -26,6 +37,18 @@ export function onParamsChange(fn) {
 }
 
 export function initControls() {
+
+  // ── Tab switching ──────────────────────────────────────────────────────────
+  document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const tab = btn.dataset.tab;
+      document.querySelectorAll('.tab-btn')
+        .forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+      document.querySelectorAll('.tab-pane')
+        .forEach(p => p.classList.toggle('active', p.id === `tab-${tab}`));
+    });
+  });
+
   // ── Pitch buttons (exclusive select) ──────────────────────────────────────
   document.querySelectorAll('#pitch-btns [data-pitch]').forEach(btn => {
     btn.addEventListener('click', () => {
@@ -63,15 +86,50 @@ export function initControls() {
     });
   });
 
-  // ── Independent toggles (dims, snap) ──────────────────────────────────────
+  // ── All data-toggle elements (toggle-switch + btn-group variants) ──────────
+  // toggle-switch = pill/switch style (Stitch and View Show sections)
+  // btn-group button with data-toggle = chip style (View Snap section)
   document.querySelectorAll('[data-toggle]').forEach(btn => {
+    if (btn.disabled) return;
     const key = btn.dataset.toggle;
-    // Sync initial active state from _state
+    // Sync initial visual state
     btn.classList.toggle('active', !!_state[key]);
     btn.addEventListener('click', () => {
       _state[key] = !_state[key];
       btn.classList.toggle('active', _state[key]);
       _notify();
     });
+  });
+
+  // ── Panel resize handle ────────────────────────────────────────────────────
+  const panel  = document.getElementById('panel');
+  const handle = document.getElementById('panel-resize');
+  const STORED_WIDTH_KEY = 'lst-panel-width';
+
+  // Restore saved width
+  const savedW = parseInt(localStorage.getItem(STORED_WIDTH_KEY), 10);
+  if (savedW && savedW >= 180 && savedW <= 420) panel.style.width = savedW + 'px';
+
+  let _resizing = false;
+
+  handle.addEventListener('mousedown', e => {
+    _resizing = true;
+    handle.classList.add('dragging');
+    e.preventDefault();
+  });
+
+  document.addEventListener('mousemove', e => {
+    if (!_resizing) return;
+    const rect  = document.getElementById('app').getBoundingClientRect();
+    const newW  = Math.round(rect.right - e.clientX);
+    const clamped = Math.min(Math.max(newW, 180), 420);
+    panel.style.width = clamped + 'px';
+  });
+
+  document.addEventListener('mouseup', () => {
+    if (!_resizing) return;
+    _resizing = false;
+    handle.classList.remove('dragging');
+    localStorage.setItem(STORED_WIDTH_KEY, parseInt(panel.style.width, 10));
   });
 }
