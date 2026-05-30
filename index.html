@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leather Stitch Tool</title>
+  <link rel="stylesheet" href="styles/app.css">
+</head>
+<body>
+  <div id="app">
+    <div id="canvas-wrap">
+      <canvas id="canvas"></canvas>
+      <div id="hint">Click to place points &nbsp;·&nbsp; Double-click to finish &nbsp;·&nbsp; Esc to cancel</div>
+      <div id="dim-label"></div>
+    </div>
+    <aside id="panel">
+      <h2>Leather Stitch Tool</h2>
+
+      <section>
+        <div class="section-label">Tool</div>
+        <div class="btn-group" id="tool-btns">
+          <button data-tool="freehand" class="active">✏ Freehand</button>
+          <button data-tool="rect">▭ Rect</button>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-label">Pitch</div>
+        <div class="btn-group" id="pitch-btns">
+          <button data-pitch="3">3</button>
+          <button data-pitch="3.38">3.38</button>
+          <button data-pitch="3.85">3.85</button>
+          <button data-pitch="4" class="active">4</button>
+          <button data-pitch="5">5</button>
+          <button data-pitch="6">6</button>
+        </div>
+        <div class="unit-note">mm between marks</div>
+      </section>
+
+      <section>
+        <div class="section-label">
+          Margin &thinsp;<span id="margin-val">3.0</span> mm
+        </div>
+        <input type="range" id="margin-range" min="1" max="15" step="0.5" value="3">
+        <div class="range-labels"><span>1 mm</span><span>15 mm</span></div>
+      </section>
+
+      <section>
+        <div class="section-label">Mark type</div>
+        <div class="btn-group col-2" id="mark-btns">
+          <button data-mark="hole" class="active">Hole ○</button>
+          <button data-mark="dot">Dot ●</button>
+          <button data-mark="slash-fwd">/ Slash</button>
+          <button data-mark="slash-back">\ Slash</button>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-label">View</div>
+        <div class="btn-group">
+          <button data-toggle="showDimensions" class="active">⊞ Dimensions</button>
+        </div>
+      </section>
+
+      <section>
+        <div class="section-label">Snap</div>
+        <div class="btn-group col-2">
+          <button data-toggle="snapVertices">⌖ Corners</button>
+          <button data-toggle="snapMidpoints">⊕ Midpts</button>
+        </div>
+      </section>
+
+      <hr>
+
+      <div id="sel-info"></div>
+
+      <div id="status"></div>
+    </aside>
+  </div>
+
+  <!-- paper.js must load before the ES module so `paper` is a global -->
+  <script src="vendor/paper-full.min.js"></script>
+  <script type="module" src="ui/canvas.js"></script>
+</body>
+</html>

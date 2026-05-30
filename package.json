@@ -1,0 +1,15 @@
+{
+  "name": "leather-stitch-tool",
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "test": "node tests/engine.test.js"
+  },
+  "dependencies": {
+    "clipper2-wasm": "^0.4.0",
+    "paper": "^0.12.18"
+  },
+  "devDependencies": {
+    "playwright": "^1.60.0"
+  }
+}

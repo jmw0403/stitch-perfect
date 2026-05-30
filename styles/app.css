@@ -1,0 +1,213 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+  background: #111;
+  color: #ccc;
+}
+
+/* ── App shell ── */
+
+#app {
+  display: flex;
+  height: 100%;
+}
+
+/* ── Canvas area ── */
+
+#canvas-wrap {
+  flex: 1;
+  position: relative;
+  background: #f7f5f0;
+  overflow: hidden;
+  /* Fine 1px gap-crosshair — falls back to system crosshair if SVG cursor unsupported */
+  cursor: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20'%3E%3Cline x1='10' y1='1' x2='10' y2='8' stroke='%23444' stroke-width='1'/%3E%3Cline x1='10' y1='12' x2='10' y2='19' stroke='%23444' stroke-width='1'/%3E%3Cline x1='1' y1='10' x2='8' y2='10' stroke='%23444' stroke-width='1'/%3E%3Cline x1='12' y1='10' x2='19' y2='10' stroke='%23444' stroke-width='1'/%3E%3C/svg%3E") 10 10, crosshair;
+}
+
+#canvas {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+#hint {
+  position: absolute;
+  bottom: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  background: rgba(0,0,0,0.45);
+  color: #eee;
+  font-size: 12px;
+  padding: 5px 12px;
+  border-radius: 4px;
+  pointer-events: none;
+  white-space: nowrap;
+}
+
+/* ── Side panel ── */
+
+#panel {
+  width: 220px;
+  flex-shrink: 0;
+  background: #1a1a1a;
+  border-left: 1px solid #333;
+  padding: 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+#panel h2 {
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #888;
+}
+
+section {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.section-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #666;
+}
+
+.unit-note {
+  font-size: 10px;
+  color: #444;
+  margin-top: 2px;
+}
+
+/* ── Button group ── */
+
+.btn-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.btn-group.col-2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.btn-group button {
+  flex: 1;
+  padding: 5px 4px;
+  background: #252525;
+  color: #999;
+  border: 1px solid #333;
+  border-radius: 4px;
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.1s, color 0.1s;
+}
+
+.btn-group button:hover {
+  background: #303030;
+  color: #ccc;
+}
+
+.btn-group button.active {
+  background: #2c7bb6;
+  color: #fff;
+  border-color: #2c7bb6;
+}
+
+/* ── Range slider ── */
+
+input[type=range] {
+  -webkit-appearance: none;
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #333;
+  outline: none;
+  margin: 6px 0 2px;
+}
+
+input[type=range]::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #2c7bb6;
+  cursor: pointer;
+  border: 2px solid #1a1a1a;
+}
+
+.range-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 10px;
+  color: #444;
+}
+
+hr {
+  border: none;
+  border-top: 1px solid #2a2a2a;
+}
+
+#status {
+  font-size: 13px;
+  color: #7db8e8;
+  min-height: 18px;
+}
+
+/* ── Selection dimensions panel ── */
+
+#sel-info {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-height: 0;
+}
+
+.sel-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.sel-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #555;
+  white-space: nowrap;
+}
+
+.sel-val {
+  font-size: 13px;
+  color: #ddd;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+/* ── Dimension label (rect draw / resize) ── */
+
+#dim-label {
+  display: none;
+  position: absolute;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 11px;
+  font-family: system-ui, sans-serif;
+  padding: 3px 8px;
+  border-radius: 3px;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 10;
+}
