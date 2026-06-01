@@ -238,15 +238,18 @@ function _renderRect(rect) {
     const closedPts = [
       { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }, { x, y },
     ];
+    // No stitches → solid cut line; has stitches → dashed ghost
+    const hasStitch = Object.values(rect.edges).some(e => e === 'stitched');
     _layers.cutLayer.activate();
     for (const ring of offsetPolyline(closedPts, margin, true, { joinType: 'miter' })) {
-      items.push(new paper.Path({
+      const cutPath = new paper.Path({
         segments: ring.map(p => new paper.Point(px(p.x), px(p.y))),
         closed: true,
-        strokeColor: '#aaa',
-        strokeWidth: 0.75,
-        dashArray: [4, 3],
-      }));
+        strokeColor: hasStitch ? '#aaa' : '#555',
+        strokeWidth:  hasStitch ? 0.75 : 1,
+      });
+      if (hasStitch) cutPath.dashArray = [4, 3];
+      items.push(cutPath);
     }
   }
 

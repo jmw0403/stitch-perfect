@@ -35,8 +35,8 @@
           <div class="btn-group" id="tool-btns">
             <button data-tool="freehand" class="active">Line</button>
             <button data-tool="rect">Rect</button>
-            <button data-tool="oval"  disabled title="Coming soon">Oval</button>
-            <button data-tool="trap"  disabled title="Coming soon">Trap</button>
+            <button data-tool="oval">Oval</button>
+            <button data-tool="trap">Trap</button>
             <button data-tool="poly">Poly</button>
           </div>
         </div>
@@ -136,6 +136,19 @@
             <span>Page border</span>
             <button class="toggle-switch" data-toggle="showPageBorder"></button>
           </div>
+          <div class="toggle-row">
+            <span>Grid</span>
+            <button class="toggle-switch" data-toggle="showGrid"></button>
+          </div>
+          <div class="toggle-row" id="grid-size-row" style="display:none">
+            <span style="color:#666">Grid size</span>
+            <span style="display:flex;align-items:center;gap:4px">
+              <input type="number" id="grid-size" min="0.5" max="50" step="0.5" value="5"
+                     style="width:44px;background:#252525;color:#aaa;border:1px solid #333;
+                            border-radius:4px;padding:2px 4px;font-size:11px;text-align:right">
+              <span style="font-size:10px;color:#555">mm</span>
+            </span>
+          </div>
         </div>
 
         <div class="pane-section">
@@ -143,7 +156,7 @@
           <div class="btn-group col-2">
             <button data-toggle="snapVertices">Corners</button>
             <button data-toggle="snapMidpoints">Midpoints</button>
-            <button data-toggle="snapGrid"  disabled>Grid</button>
+            <button data-toggle="snapGrid">Grid</button>
             <button data-toggle="snapEdges" disabled>Edges</button>
           </div>
         </div>

@@ -5,8 +5,10 @@ import { placeMarks, snapToStitches } from '../engine/stitch.js';
 import { initOffset, offsetPolyline } from '../engine/offset.js';
 import Clipper2Factory from '../vendor/clipper2z.js';
 import { initControls, getParams, onParamsChange } from './controls.js';
-import { initPolyTool, activatePolyMode, deactivatePolyMode,
+import { initPolyTool, activatePolyMode, activateTrapMode, deactivatePolyMode,
          redrawAllPolys, getPolyStats, getAllPolys } from './poly-tool.js';
+import { initOvalTool, activateOvalMode, deactivateOvalMode,
+         redrawAllOvals, getOvalStats, getAllOvals } from './oval-tool.js';
 import { downloadSVG } from './export.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
@@ -44,10 +46,81 @@ window.addEventListener('resize', () => {
 
 // ── Layers (bottom → top) ─────────────────────────────────────────────────────
 
+const pageLayer   = new paper.Layer(); // page border — below everything
+const gridLayer   = new paper.Layer(); // grid — below cut layer
 const cutLayer    = new paper.Layer();
 const stitchLayer = new paper.Layer();
 const markLayer   = new paper.Layer();
 const handleLayer = new paper.Layer(); // always on top — resize handles
+
+// ── Grid overlay (CSS background — no paper.js objects, excluded from SVG) ───
+
+function updateGridOverlay() {
+  const { showGrid, gridSize, snapGrid } = getParams();
+  const el = document.getElementById('grid-size-row');
+  if (el) el.style.display = showGrid ? 'flex' : 'none';
+
+  if (!showGrid) {
+    wrap.style.backgroundImage = 'none';
+    return;
+  }
+  const pxSize = px(gridSize);
+  const col = snapGrid ? 'rgba(44,123,182,0.12)' : 'rgba(0,0,0,0.06)';
+  wrap.style.backgroundImage =
+    `linear-gradient(to right, ${col} 1px, transparent 1px),
+     linear-gradient(to bottom, ${col} 1px, transparent 1px)`;
+  wrap.style.backgroundSize = `${pxSize}px ${pxSize}px`;
+}
+
+// ── Page border overlay (paper.js layer) ──────────────────────────────────────
+
+const PAGE_SIZES_MM = { a4: [210, 297], letter: [216, 279], a3: [297, 420] };
+
+function updatePageOverlay() {
+  pageLayer.activate();
+  pageLayer.removeChildren();
+
+  const { showPageBorder, pageSize } = getParams();
+  if (!showPageBorder || pageSize === 'none') return;
+
+  const dims = PAGE_SIZES_MM[pageSize];
+  if (!dims) return;
+  const [w, h] = dims;
+
+  // Page shadow
+  const shadow = new paper.Path.Rectangle(
+    new paper.Point(px(2), px(2)),
+    new paper.Size(px(w), px(h)));
+  shadow.fillColor = 'rgba(0,0,0,0.08)';
+  shadow.strokeWidth = 0;
+
+  // Page rectangle
+  const page = new paper.Path.Rectangle(
+    new paper.Point(0, 0),
+    new paper.Size(px(w), px(h)));
+  page.fillColor   = 'white';
+  page.strokeColor = '#bbb';
+  page.strokeWidth = 0.75;
+
+  // Page label
+  const label = new paper.PointText({
+    point: new paper.Point(px(w) - 2, px(h) - 2),
+    content: pageSize === 'a4' ? 'A4' : pageSize === 'a3' ? 'A3' : 'Letter',
+    fontSize: 8,
+    fillColor: '#ccc',
+    justification: 'right',
+  });
+}
+
+// Snap a mm point to the grid if snapGrid is active
+function _snapToGridMm(xMm, yMm) {
+  const { snapGrid, gridSize } = getParams();
+  if (!snapGrid) return { x: xMm, y: yMm };
+  return {
+    x: Math.round(xMm / gridSize) * gridSize,
+    y: Math.round(yMm / gridSize) * gridSize,
+  };
+}
 
 initRectTool(
   { cutLayer, stitchLayer, markLayer, handleLayer },
@@ -60,6 +133,12 @@ initPolyTool(
   () => { updateStatus(); updateSelInfo(); },
   (poly) => { _zAdd('poly', poly); },
   (poly) => { _zRemove(poly); },
+);
+initOvalTool(
+  { cutLayer, stitchLayer, markLayer, handleLayer },
+  () => { updateStatus(); updateSelInfo(); },
+  (oval) => { _zAdd('oval', oval); },
+  (oval) => { _zRemove(oval); },
 );
 
 // ── Freehand pieces ───────────────────────────────────────────────────────────
@@ -161,7 +240,10 @@ function redrawAll() {
   });
   redrawAllRects();
   redrawAllPolys();
+  redrawAllOvals();
   deduplicateCorners();
+  updateGridOverlay();
+  updatePageOverlay();
   updateStatus();
   updateSelInfo();
 }
@@ -175,13 +257,14 @@ function updateStatus() {
   const pitchEl  = document.getElementById('status-pitch');
   const rs = getRectStats();
   const ps = getPolyStats();
-  const totalPieces   = pieces.length + rs.count + ps.count;
+  const os = getOvalStats();
+  const totalPieces   = pieces.length + rs.count + ps.count + os.count;
 
   if (totalPieces === 0) {
     statusEl.textContent = '';
   } else {
-    const totalStitches = pieces.reduce((s, p) => s + p.count, 0)    + rs.stitches + ps.stitches;
-    const totalMarks    = pieces.reduce((s, p) => s + p.markCount, 0) + rs.marks   + ps.marks;
+    const totalStitches = pieces.reduce((s, p) => s + p.count, 0)    + rs.stitches + ps.stitches + os.stitches;
+    const totalMarks    = pieces.reduce((s, p) => s + p.markCount, 0) + rs.marks   + ps.marks   + os.marks;
     statusEl.textContent = (totalPieces === 1 && pieces.length === 1)
       ? `Line – ${pieces[0].count} stitches`
       : `${totalPieces} piece${totalPieces > 1 ? 's' : ''} · ${totalStitches} stitches`;
@@ -672,6 +755,8 @@ const HINTS = {
   freehand: 'Click to place points &nbsp;·&nbsp; Double-click to finish &nbsp;·&nbsp; Esc to cancel',
   rect:     'Drag to draw &nbsp;·&nbsp; Click edge to toggle stitch/open &nbsp;·&nbsp; Drag corner to resize &nbsp;·&nbsp; Delete to remove',
   poly:     'Click to place vertices &nbsp;·&nbsp; Click start point or Enter to close &nbsp;·&nbsp; Click edge to cycle state &nbsp;·&nbsp; Drag vertex to reshape',
+  trap:     'Drag to draw trapezoid &nbsp;·&nbsp; Click edge to cycle state &nbsp;·&nbsp; Drag corner to reshape',
+  oval:     'Drag to draw oval &nbsp;·&nbsp; Click oval to select &nbsp;·&nbsp; Drag cardinal handle to resize',
 };
 
 let _activeTool = 'freehand';
@@ -689,14 +774,22 @@ document.querySelectorAll('#tool-btns [data-tool]').forEach(btn => {
     if (name === _activeTool) return;
     if (name === 'rect') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
-      _deselectFreehand(); deactivatePolyMode();
+      _deselectFreehand(); deactivatePolyMode(); deactivateOvalMode();
       activateRectMode();
     } else if (name === 'poly') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
-      _deselectFreehand(); deactivateRectMode();
+      _deselectFreehand(); deactivateRectMode(); deactivateOvalMode();
       activatePolyMode();
+    } else if (name === 'trap') {
+      clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
+      _deselectFreehand(); deactivateRectMode(); deactivateOvalMode();
+      activateTrapMode();
+    } else if (name === 'oval') {
+      clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
+      _deselectFreehand(); deactivateRectMode(); deactivatePolyMode();
+      activateOvalMode();
     } else { // freehand
-      deactivateRectMode(); deactivatePolyMode();
+      deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode();
       freehandTool.activate();
     }
     setTool(name);
@@ -856,7 +949,12 @@ freehandTool.onMouseDown = (event) => {
     stitchLayer.activate();
     activePath = new paper.Path({ strokeColor: '#2c7bb6', strokeWidth: 1, opacity: 0.5 });
   }
-  activePath.add(event.point);
+  // Apply grid snap to placed vertex
+  const snapPt = (() => {
+    const snapped = _snapToGridMm(toMm(event.point.x), toMm(event.point.y));
+    return new paper.Point(px(snapped.x), px(snapped.y));
+  })();
+  activePath.add(snapPt);
 };
 
 freehandTool.onMouseDrag = (event) => {

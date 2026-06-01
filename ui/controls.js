@@ -14,11 +14,16 @@ const _state = {
   showCutOutline: true,
   showStitchLine: true,
   showPageBorder: false,
+  // View tab — Grid
+  showGrid:       false,
+  gridSize:       5,     // mm
   // View tab — Snap
   snapVertices:   false,
   snapMidpoints:  false,
   snapGrid:       false,
   snapEdges:      false,
+  // View tab — Page
+  pageSize:       'none',
 };
 
 const _listeners = [];
@@ -100,6 +105,31 @@ export function initControls() {
       _notify();
     });
   });
+
+  // ── Page size select ──────────────────────────────────────────────────────────
+  const pageSizeEl = document.getElementById('page-size');
+  if (pageSizeEl) {
+    pageSizeEl.value = _state.pageSize;
+    pageSizeEl.addEventListener('change', () => {
+      _state.pageSize = pageSizeEl.value;
+      // showPageBorder auto-turns on when a page is selected
+      if (_state.pageSize !== 'none' && !_state.showPageBorder) {
+        _state.showPageBorder = true;
+        document.querySelector('[data-toggle="showPageBorder"]')?.classList.add('active');
+      }
+      _notify();
+    });
+  }
+
+  // ── Grid size input ────────────────────────────────────────────────────────────
+  const gridSizeEl = document.getElementById('grid-size');
+  if (gridSizeEl) {
+    gridSizeEl.value = _state.gridSize;
+    gridSizeEl.addEventListener('input', () => {
+      const v = parseFloat(gridSizeEl.value);
+      if (v >= 0.5) { _state.gridSize = v; _notify(); }
+    });
+  }
 
   // ── Panel resize handle ────────────────────────────────────────────────────
   const panel  = document.getElementById('panel');

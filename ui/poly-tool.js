@@ -43,6 +43,14 @@ export function initPolyTool(layers, onChangeFn, onAddedFn, onDeletedFn) {
   _polyTool = new paper.Tool();
 
   _polyTool.onMouseDown = (event) => {
+    // Trap mode: click-drag defines bounding box → committed as 4-vertex trapezoid
+    if (_trapMode && !_drawState) {
+      _trapStart = { x: toMm(event.point.x), y: toMm(event.point.y) };
+      _layers.stitchLayer.activate();
+      _trapDraft = new paper.Path({ strokeColor: '#2c7bb6', strokeWidth: 1, opacity: 0.45, fillColor: null });
+      return;
+    }
+
     // Drawing mode: click near first vertex to close; otherwise add vertex
     if (_drawState) {
       if (_drawState.pts.length >= 3) {
@@ -87,11 +95,55 @@ export function initPolyTool(layers, onChangeFn, onAddedFn, onDeletedFn) {
   };
 
   _polyTool.onMouseDrag = (event) => {
+    // Trap drag: update preview
+    if (_trapMode && _trapStart) {
+      const ex = toMm(event.point.x), ey = toMm(event.point.y);
+      const x = Math.min(_trapStart.x, ex), y = Math.min(_trapStart.y, ey);
+      const w = Math.abs(ex - _trapStart.x), h = Math.abs(ey - _trapStart.y);
+      const inset = w * 0.2; // 20% narrower at bottom (classic card-slot shape)
+      if (_trapDraft) _trapDraft.remove();
+      _layers.stitchLayer.activate();
+      _trapDraft = new paper.Path({
+        segments: [
+          [px(x),         px(y)],
+          [px(x + w),     px(y)],
+          [px(x + w - inset), px(y + h)],
+          [px(x + inset), px(y + h)],
+        ],
+        closed: true,
+        strokeColor: '#2c7bb6', strokeWidth: 1, opacity: 0.45, fillColor: null,
+      });
+      _trapDraft._trapData = { x, y, w, h, inset };
+      return;
+    }
     if (_dragVertex) { _updateVertexDrag(event.point); return; }
     if (_moveState)  { _updateMove(event.point);       return; }
   };
 
   _polyTool.onMouseUp = () => {
+    // Commit trap
+    if (_trapMode && _trapStart) {
+      const td = _trapDraft?._trapData;
+      if (_trapDraft) { _trapDraft.remove(); _trapDraft = null; }
+      _trapStart = null;
+      if (td && td.w > 4 && td.h > 4) {
+        const { x, y, w, h, inset } = td;
+        const pts = [
+          { x,                  y },
+          { x: x + w,           y },
+          { x: x + w - inset,   y: y + h },
+          { x: x + inset,       y: y + h },
+        ];
+        const poly = { pts, edges: pts.map(() => 'stitched'), items: [] };
+        poly.items = _renderPoly(poly);
+        _polys.push(poly);
+        _deselectPoly();
+        _selectPoly(poly);
+        _onAdded(poly);
+        _onChange();
+      }
+      return;
+    }
     if (_dragVertex) { _commitVertexDrag(); }
     if (_moveState)  { _commitMove(); }
   };
@@ -110,9 +162,28 @@ export function initPolyTool(layers, onChangeFn, onAddedFn, onDeletedFn) {
   };
 }
 
-export function activatePolyMode() { if (_polyTool) _polyTool.activate(); }
+export function activatePolyMode() {
+  _trapMode = false;
+  if (_polyTool) _polyTool.activate();
+}
+
+// Trap mode: click-drag creates a 4-vertex trapezoid (wider at top, narrower at bottom)
+// then switches to normal poly vertex-edit mode.
+let _trapMode    = false;
+let _trapDraft   = null; // draft paper item during drag
+let _trapStart   = null; // {x,y} mm at drag start
+
+export function activateTrapMode() {
+  _trapMode = true;
+  if (_polyTool) _polyTool.activate();
+}
+
+// Override onMouseDown/Drag/Up for trap when _trapMode is active
+// (inserted before the normal poly handler)
 
 export function deactivatePolyMode() {
+  _trapMode = false;
+  if (_trapDraft) { _trapDraft.remove(); _trapDraft = null; }
   if (_drawState) _cancelDraw();
   _deselectPoly();
 }
@@ -195,14 +266,16 @@ function _renderPoly(poly) {
   // Cut outline
   if (showCutOutline) {
     const cutPts = _buildCutOutline(poly);
+    const hasStitch = poly.edges.some(e => e === 'stitched');
     _layers.cutLayer.activate();
-    items.push(new paper.Path({
+    const cutPath = new paper.Path({
       segments: cutPts.map(p => new paper.Point(px(p.x), px(p.y))),
       closed: true,
-      strokeColor: '#aaa',
-      strokeWidth: 0.75,
-      dashArray: [4, 3],
-    }));
+      strokeColor: hasStitch ? '#aaa' : '#555',
+      strokeWidth:  hasStitch ? 0.75 : 1,
+    });
+    if (hasStitch) cutPath.dashArray = [4, 3];
+    items.push(cutPath);
   }
 
   // Per-edge rendering
