@@ -476,14 +476,20 @@ Grinda-style bifold (ref PDF pages 2/7/12/17/22).
    └────────────────────────────┘  bottom stitch seam
 ```
 
-**Four named parameters (all drag-adjustable via handles):**
+**Five user-controlled parameters (confirmed by user):**
 
-| Handle | Controls | Derived value |
+| Parameter | What it is | What auto-adjusts |
 |---|---|---|
-| Top-edge width handle | Overall width W | — |
-| T-shoulder handle (L or R step) | T-bar height Ht | Short vert stitch run length |
-| Bottom-corner handle | Slant angle α | Bottom width = W − 2·Ht·tan(α) |
-| Bottom-midpoint handle | Overall height H | Slant run length |
+| **Total height** | Top of T-bar to bottom seam | Slant length |
+| **T width** | Width of the T-bar (widest point) | — |
+| **T height** | Height of the rectangular T-bar section | Stitch run on T sides |
+| **T tab length** | How long the "ears" extend horizontally | — |
+| **Base width** | Width of the bottom stitch seam | Slant angle auto-derives |
+
+**Constraint:** angled sides auto-calculate to connect T-shoulder corners to
+base-width corners. User never sets the angle directly — it falls out of the
+other five dimensions. This makes editing fast: change base width and the
+slant updates instantly.
 
 **Pre-wired stitch states:**
 - Top edge → **hidden** (pocket mouth, no stitching)
@@ -513,10 +519,95 @@ to nearest whole-stitch multiple. Bottom snaps independently.
 - D-ring slot (small rect with one stitched end)
 - Zipper pocket (rect with zipper-edge treatment)
 
-### Phase 4 — Export
-- [ ] `ui/export.js` — SVG download (stitch line + cut line + marks)
-- [ ] Print layout: page border visible, pieces arranged inside, export to scale
+### Phase 4 — Export ✅ (partial)
+- [x] `ui/export.js` — SVG download, all piece types, marks, labels, 50mm scale bar
 - [ ] DXF export (for laser cutters)
+- [ ] Page overlay fix (A4/Letter not rendering — see Phase 4.7)
+
+### Phase 4.6 — Immediate Fixes + Missing Shapes
+
+Items confirmed broken or missing from live site:
+
+**Broken / unimplemented shapes:**
+- [ ] **Oval** — click-drag bounding box; ellipse approximated with 4 cubic Béziers;
+      arc-length mark spacing; single edge state (whole perimeter stitched/open/hidden)
+- [ ] **Trap** — shortcut to 4-vertex polygon; corners freely draggable independently;
+      same edge states as poly; angle readout per edge
+
+**Page overlay (broken):**
+- [ ] Page size dropdown in View tab currently has no visual effect
+- [ ] Fix: draw a light gray rectangle on a dedicated page layer at the selected
+      paper size (A4: 210×297mm, Letter: 216×279mm, A3: 297×420mm)
+- [ ] Toggle on/off via the existing showPageBorder state
+
+**No-stitch / cut-only pattern pieces:**
+- [ ] Any shape type (rect, poly, oval, trap) should be able to have ALL edges
+      set to hidden AND a solid (not dashed) cut outline
+- [ ] Add a "Line style" toggle per piece: **Dashed** (default, ghost cut) vs
+      **Solid** (final cut outline — for pieces with no stitching)
+- [ ] Primary use: wallet body, bill divider, spacer — the cut shape with no marks
+
+**Grid overlay:**
+- [ ] Toggle in View tab: "Grid" turns on a square grid overlay
+- [ ] Grid color: light gray (#ddd), non-printing (excluded from SVG export)
+- [ ] Grid size: adjustable in mm via a small input in the View tab (default 5mm)
+- [ ] Snap to grid toggle: when on, placed vertices snap to grid intersections
+- [ ] Grid stays aligned to canvas origin (not to the page border)
+
+**Dimension annotation tool:**
+- [ ] A "Dim" tool in the Shapes → Draw section
+- [ ] Click two points to place a dimension line with arrows and a mm label
+- [ ] Two modes switchable in Piece tab:
+      — **Pattern piece** (outside dimension from cut outline) — always shown
+      — **Stitch line** (inside dimension from stitch line) — optional
+- [ ] Arrow style: clean, thin; label floats above the dimension line
+- [ ] Included in SVG export as a `<g>` element (lines + text)
+- [ ] Moves with the piece when grouped
+
+### Phase 4.7 — Print / Export Tab + Multi-Page
+
+Replaces the export section currently in the View tab with a dedicated
+fifth tab: **Print**.
+
+**Print tab content:**
+- [ ] Page size selector: A4 / Letter / A3 / Custom (W×H mm)
+- [ ] Orientation: Portrait / Landscape
+- [ ] Scale: 100% (1:1) / Fit to page / Custom %
+- [ ] Margins: top/right/bottom/left in mm
+- [ ] "Show page border on canvas" toggle (same as current View → Page border)
+
+**Title block / Footer:**
+- [ ] Project name field (text input)
+- [ ] Designer name field
+- [ ] Date (auto-populated, editable)
+- [ ] Notes / description textarea
+- [ ] These appear as a footer bar on each printed page
+
+**Watermark:**
+- [ ] Optional text watermark (e.g. "DRAFT", "SAMPLE")
+- [ ] Opacity slider
+
+**Multi-page tiling:**
+When a pattern layout is wider or taller than one page, StitchPerfect tiles
+it across multiple pages automatically.
+
+- [ ] Preview shows all pages as a grid (thumbnail view)
+- [ ] Each page tile shows which pieces fall on it
+- [ ] **Registration marks** on every page — printed 10mm from each corner:
+      a small crosshair (+) with a "cut here" indicator so pages can be
+      aligned when assembling the printed pattern
+- [ ] **Cut line** at page overlap: a dashed line with a ½-scissor icon
+      ("——✂——") indicating where to trim the paper before butting pages together
+- [ ] Overlap margin: user-set (default 10mm) — each adjacent page repeats
+      this border so pieces can be aligned before taping
+- [ ] Export: one PDF/SVG per page, numbered (page-1.svg, page-2.svg, etc.)
+      OR a single multi-page PDF
+
+**Templates (saved layouts):**
+- [ ] Save current canvas layout as a named template
+- [ ] Load template: restores all pieces, positions, and parameter settings
+- [ ] Templates stored in localStorage (no server needed)
+- [ ] Export template as JSON file; import from JSON
 
 ### Phase 4.5 — Annotations (text boxes, title, footer)
 
@@ -545,10 +636,10 @@ sharing — pattern name, pitch label, date, designer name, notes.
       and included in export so the user can calibrate their printer
       (same function as the "1 inch Scale" box on the Atelier Grinda sheets)
 
-### Phase 5 — Deploy
-- [ ] Initialize Git repo
-- [ ] Push to GitHub
-- [ ] Connect to Vercel, get public URL
+### Phase 5 — Deploy ✅
+- [x] Initialize Git repo
+- [x] Push to GitHub → github.com/jmw0403/stitch-perfect
+- [x] Connect to Vercel → stitchperfect.app live
 
 ### Phase 6 — Mating Pieces + Assembled View (v2)
 Inspired by the Atelier Grinda bifold pattern (pages 4/9/14/19/24):
