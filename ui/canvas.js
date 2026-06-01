@@ -58,6 +58,92 @@ const stitchLayer = new paper.Layer();
 const markLayer   = new paper.Layer();
 const handleLayer = new paper.Layer(); // always on top — resize handles
 
+// ── Trace image background ────────────────────────────────────────────────────
+// A PNG/JPG imported as a semi-transparent guide layer. Not included in SVG.
+// The user can move it (drag) and scale it (drag corners).
+
+let _traceRaster = null;   // paper.Raster on pageLayer
+let _traceScale  = 1;      // current scale factor
+let _traceDragState = null;// { startPt, origPos }
+
+function _initTraceControls() {
+  const loadBtn    = document.getElementById('btn-trace-load');
+  const clearBtn   = document.getElementById('btn-trace-clear');
+  const fileInput  = document.getElementById('trace-file-input');
+  const opacityEl  = document.getElementById('trace-opacity');
+  const ctrlsRow   = document.getElementById('trace-controls');
+
+  loadBtn?.addEventListener('click', () => fileInput?.click());
+
+  fileInput?.addEventListener('change', (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      _loadTraceImage(ev.target.result);
+      if (clearBtn) clearBtn.disabled = false;
+      if (ctrlsRow) ctrlsRow.style.display = 'flex';
+    };
+    reader.readAsDataURL(file);
+    fileInput.value = ''; // allow re-loading same file
+  });
+
+  clearBtn?.addEventListener('click', () => {
+    if (_traceRaster) { _traceRaster.remove(); _traceRaster = null; }
+    if (clearBtn) clearBtn.disabled = true;
+    if (ctrlsRow) ctrlsRow.style.display = 'none';
+  });
+
+  opacityEl?.addEventListener('input', () => {
+    if (_traceRaster) _traceRaster.opacity = parseFloat(opacityEl.value) / 100;
+  });
+}
+
+function _loadTraceImage(dataUrl) {
+  if (_traceRaster) _traceRaster.remove();
+  pageLayer.activate();
+  const img = new Image();
+  img.onload = () => {
+    pageLayer.activate();
+    _traceRaster = new paper.Raster(img);
+    _traceRaster.position = paper.view.center;
+    // Scale so image fits within view at ~70% of smaller dimension
+    const viewW = toMm(canvasEl.width / (window.devicePixelRatio || 1));
+    const viewH = toMm(canvasEl.height / (window.devicePixelRatio || 1));
+    const fitScale = Math.min((viewW * 0.7 * 3.78) / img.width, (viewH * 0.7 * 3.78) / img.height);
+    _traceRaster.scale(fitScale);
+    _traceScale = fitScale;
+    _traceRaster.opacity = 0.4;
+    _traceRaster.locked  = false; // allow drag moves via our custom handler
+  };
+  img.src = dataUrl;
+}
+
+// Handle trace image move (click+drag when no other tool interaction)
+// Called from the freehand tool's mousedown before normal handling
+export function handleTraceMouseDown(point) {
+  if (!_traceRaster) return false;
+  const local = _traceRaster.globalToLocal(point);
+  const hw = _traceRaster.width / 2, hh = _traceRaster.height / 2;
+  if (Math.abs(local.x) < hw && Math.abs(local.y) < hh) {
+    _traceDragState = { startPt: point, origPos: _traceRaster.position.clone() };
+    return true;
+  }
+  return false;
+}
+
+export function handleTraceMouseDrag(point) {
+  if (!_traceDragState || !_traceRaster) return false;
+  const delta = point.subtract(_traceDragState.startPt);
+  _traceRaster.position = _traceDragState.origPos.add(delta);
+  return true;
+}
+
+export function handleTraceMouseUp() {
+  if (_traceDragState) { _traceDragState = null; return true; }
+  return false;
+}
+
 // ── Grid overlay (CSS background — no paper.js objects, excluded from SVG) ───
 
 function updateGridOverlay() {
@@ -145,6 +231,8 @@ initOvalTool(
   (oval) => { _zAdd('oval', oval); },
   (oval) => { _zRemove(oval); },
 );
+_initTraceControls();
+
 initBezierTool(
   { cutLayer, stitchLayer, markLayer, handleLayer },
   () => { updateStatus(); updateSelInfo(); },
@@ -1105,10 +1193,10 @@ const freehandTool = new paper.Tool();
 
 freehandTool.onMouseDown = (event) => {
   // Alt+click: cycle through overlapping objects
-  if (event.modifiers?.alt) {
-    _zAltClick(event.point);
-    return;
-  }
+  if (event.modifiers?.alt) { _zAltClick(event.point); return; }
+
+  // Trace image move (when not drawing and no piece hit)
+  if (!activePath && handleTraceMouseDown(event.point)) return;
 
   // If not drawing: check for piece hit first
   if (!activePath) {
@@ -1172,6 +1260,7 @@ freehandTool.onMouseDown = (event) => {
 };
 
 freehandTool.onMouseDrag = (event) => {
+  if (handleTraceMouseDrag(event.point)) return;
   if (!_fhDragPiece) return;
   let dx = toMm(event.point.x - _fhDragStart.x);
   let dy = toMm(event.point.y - _fhDragStart.y);
@@ -1240,6 +1329,7 @@ freehandTool.onMouseDrag = (event) => {
 };
 
 freehandTool.onMouseUp = () => {
+  if (handleTraceMouseUp()) return;
   if (_fhDragPiece) {
     _fhDragPiece = null;
     _showFhSnapAt(null);

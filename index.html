@@ -172,6 +172,21 @@
         </div>
 
         <div class="pane-section">
+          <div class="pane-label">Trace Image</div>
+          <div class="btn-group col-2">
+            <button id="btn-trace-load" title="Import PNG or JPG as a tracing guide">⬆ Load</button>
+            <button id="btn-trace-clear" disabled title="Remove trace image">✕ Clear</button>
+          </div>
+          <div class="toggle-row" id="trace-controls" style="display:none">
+            <span>Opacity</span>
+            <input type="range" id="trace-opacity" min="10" max="80" step="5" value="40"
+                   style="width:80px;margin:0">
+          </div>
+          <input type="file" id="trace-file-input" accept="image/png,image/jpeg,image/jpg"
+                 style="display:none">
+        </div>
+
+        <div class="pane-section">
           <div class="pane-label">Snap</div>
           <div class="btn-group col-2">
             <button data-toggle="snapVertices">Corners</button>
