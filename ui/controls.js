@@ -25,6 +25,14 @@ const _state = {
   snapEdges:      false,
   // View tab — Page
   pageSize:       'none',
+  // Print tab
+  printAutoTile:  true,
+  printRegMarks:  true,
+  printOverlap:   10,      // mm
+  printTitle:     '',
+  printDesigner:  '',
+  printPageSize:  'none',
+  printLandscape: false,
 };
 
 const _listeners = [];
@@ -122,6 +130,39 @@ export function initControls() {
       btn.classList.toggle('active', _state[key]);
       _notify();
     });
+  });
+
+  // ── Print tab controls ────────────────────────────────────────────────────────
+  const printTitle    = document.getElementById('print-title');
+  const printDesigner = document.getElementById('print-designer');
+  const printPageSel  = document.getElementById('print-page-size');
+  const printOverlap  = document.getElementById('print-overlap');
+  const orientPort    = document.getElementById('btn-orient-port');
+  const orientLand    = document.getElementById('btn-orient-land');
+
+  printTitle?.addEventListener('input', () => { _state.printTitle = printTitle.value; _notify(); });
+  printDesigner?.addEventListener('input', () => { _state.printDesigner = printDesigner.value; _notify(); });
+  printOverlap?.addEventListener('input', () => {
+    const v = parseInt(printOverlap.value, 10);
+    if (v >= 5) { _state.printOverlap = v; _notify(); }
+  });
+  printPageSel?.addEventListener('change', () => {
+    _state.printPageSize = printPageSel.value;
+    if (_state.printPageSize !== 'none' && !_state.showPageBorder) {
+      _state.showPageBorder = true;
+      document.querySelector('[data-toggle="showPageBorder"]')?.classList.add('active');
+    }
+    _notify();
+  });
+  orientPort?.addEventListener('click', () => {
+    _state.printLandscape = false;
+    orientPort.classList.add('active'); orientLand.classList.remove('active');
+    _notify();
+  });
+  orientLand?.addEventListener('click', () => {
+    _state.printLandscape = true;
+    orientLand.classList.add('active'); orientPort.classList.remove('active');
+    _notify();
   });
 
   // ── Page size select ──────────────────────────────────────────────────────────

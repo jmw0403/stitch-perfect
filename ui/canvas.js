@@ -17,6 +17,7 @@ import { initBezierTool, initBezierToolLayers, activateBezierMode, deactivateBez
 import { rerenderOval, moveOvalBy } from './oval-tool.js';
 import { movePolyBy } from './poly-tool.js';
 import { downloadSVG } from './export.js';
+import { downloadTiledPages, getPagePreview, computePageLayout } from './print.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, getSelectedRectRef,
          toggleSelectedEdge, copySelectedRect, pasteRect, flipSelectedRect,
@@ -375,6 +376,7 @@ function redrawAll() {
   updatePageOverlay();
   updateStatus();
   updateSelInfo();
+  _updatePrintPreview();
 }
 
 onParamsChange(redrawAll);
@@ -1367,10 +1369,27 @@ document.getElementById('btn-tpocket')?.addEventListener('click', () => {
   rerenderPoly(poly); // renders items + handles, triggers _onChange → status/selInfo
 });
 
-// Wire View tab Export buttons
+// Wire Export buttons (both View tab legacy + Print tab)
 document.getElementById('btn-export-svg')?.addEventListener('click', () => {
   downloadSVG(pieces, getAllRects(), getAllPolys());
 });
+document.getElementById('btn-export-pages')?.addEventListener('click', () => {
+  downloadTiledPages(pieces, getAllRects(), getAllPolys());
+});
+
+// Update page preview when params change
+function _updatePrintPreview() {
+  const el = document.getElementById('print-page-count');
+  if (!el) return;
+  const { printPageSize, printLandscape, printOverlap } = getParams();
+  // Rough content size estimate from all pieces
+  const rects = getAllRects(), polys = getAllPolys();
+  let maxX = 0, maxY = 0;
+  pieces.forEach(p => p.pts.forEach(pt => { maxX=Math.max(maxX,pt.x); maxY=Math.max(maxY,pt.y); }));
+  rects.forEach(r => { maxX=Math.max(maxX,r.x+r.w); maxY=Math.max(maxY,r.y+r.h); });
+  polys.forEach(p => p.pts.forEach(pt => { maxX=Math.max(maxX,pt.x); maxY=Math.max(maxY,pt.y); }));
+  el.textContent = getPagePreview(maxX+10, maxY+10, printPageSize, printLandscape, printOverlap);
+}
 
 // ── Alignment tools ───────────────────────────────────────────────────────────
 

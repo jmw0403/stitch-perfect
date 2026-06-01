@@ -25,6 +25,7 @@
         <button class="tab-btn"        data-tab="stitch">Stitch</button>
         <button class="tab-btn"        data-tab="piece">Piece</button>
         <button class="tab-btn"        data-tab="view">View</button>
+        <button class="tab-btn"        data-tab="print">Print</button>
       </nav>
 
       <!-- ══════════════ Shapes tab ══════════════ -->
@@ -224,6 +225,74 @@
         </div>
 
       </div><!-- /tab-view -->
+
+      <!-- ══════════════ Print tab ══════════════ -->
+      <div class="tab-pane" id="tab-print">
+
+        <div class="pane-section">
+          <div class="pane-label">Sheet info</div>
+          <input type="text" id="print-title" placeholder="Project name"
+                 style="width:100%;background:#252525;color:#ddd;border:1px solid #333;
+                        border-radius:4px;padding:4px 6px;font-size:12px;font-family:inherit">
+          <input type="text" id="print-designer" placeholder="Designer / date"
+                 style="width:100%;background:#252525;color:#ddd;border:1px solid #333;
+                        border-radius:4px;padding:4px 6px;font-size:12px;font-family:inherit;margin-top:4px">
+        </div>
+
+        <div class="pane-section">
+          <div class="pane-label">Page</div>
+          <select id="print-page-size">
+            <option value="none">No page</option>
+            <option value="a4">A4 &nbsp; 210 × 297 mm</option>
+            <option value="letter">Letter &nbsp; 216 × 279 mm</option>
+            <option value="a3">A3 &nbsp; 297 × 420 mm</option>
+          </select>
+          <div class="btn-group col-2" style="margin-top:6px">
+            <button id="btn-orient-port" class="active" title="Portrait">↕ Portrait</button>
+            <button id="btn-orient-land" title="Landscape">↔ Landscape</button>
+          </div>
+        </div>
+
+        <div class="pane-section">
+          <div class="pane-label">Multi-page tiling</div>
+          <div class="toggle-row">
+            <span>Auto-tile if needed</span>
+            <button class="toggle-switch active" data-toggle="printAutoTile"></button>
+          </div>
+          <div class="toggle-row" style="margin-top:4px">
+            <span>Overlap margin</span>
+            <span style="display:flex;align-items:center;gap:4px">
+              <input type="number" id="print-overlap" min="5" max="30" step="1" value="10"
+                     style="width:44px;background:#252525;color:#aaa;border:1px solid #333;
+                            border-radius:4px;padding:2px 4px;font-size:11px;text-align:right">
+              <span style="font-size:10px;color:#555">mm</span>
+            </span>
+          </div>
+          <div class="toggle-row">
+            <span>Registration marks</span>
+            <button class="toggle-switch active" data-toggle="printRegMarks"></button>
+          </div>
+        </div>
+
+        <div class="pane-section">
+          <div class="pane-label">Export</div>
+          <button id="btn-export-svg" class="export-btn">⬇ Download SVG</button>
+          <button id="btn-export-pages" class="export-btn" style="margin-top:4px">
+            ⬇ Download tiled pages (ZIP)
+          </button>
+          <button id="btn-export-dxf" class="export-btn" disabled style="margin-top:4px">
+            ⬇ Download DXF
+          </button>
+        </div>
+
+        <div class="pane-section" id="print-preview-section">
+          <div class="pane-label">Preview</div>
+          <div id="print-page-count" style="font-size:11px;color:#555">
+            Set a page size to see tiling preview
+          </div>
+        </div>
+
+      </div><!-- /tab-print -->
 
       <!-- ── Persistent status bar ── -->
       <div id="status-bar">
