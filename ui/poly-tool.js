@@ -3,7 +3,7 @@
 
 import { placeMarks, snapToStitches } from '../engine/stitch.js';
 import { offsetPolyline } from '../engine/offset.js';
-import { getParams } from './controls.js';
+import { getParams, getItemParams } from './controls.js';
 import { px, toMm, createMark } from './render.js';
 import { tpocketVertices, translatePts, clampParams } from './tpocket.js';
 
@@ -317,7 +317,7 @@ function _inwardNormal(a, b) {
 }
 
 function _renderTPocketCutFirst(poly) {
-  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getParams();
+  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getItemParams(poly);
   const { pts } = poly;
   // Enforce T-pocket constraints: top edge (0) always hidden, shoulders (2,6) always hidden
   const edges = [...poly.edges];
@@ -396,7 +396,7 @@ function _renderPoly(poly) {
   // T-pocket: pts = cut outline, stitch inset by margin (cut-first model)
   if (poly.tpocketParams) return _renderTPocketCutFirst(poly);
 
-  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getParams();
+  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getItemParams(poly);
   const items = [];
   const n = poly.pts.length;
 

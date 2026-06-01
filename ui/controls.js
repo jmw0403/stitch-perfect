@@ -14,6 +14,7 @@ const _state = {
   showCutOutline: true,
   showStitchLine: true,
   showPageBorder: false,
+  showMidGuides:  true,
   // View tab — Grid
   showGrid:       false,
   gridSize:       5,     // mm
@@ -35,6 +36,23 @@ function _notify() {
 
 export function getParams() {
   return { ..._state };
+}
+
+/**
+ * Return params for a specific piece, applying any per-piece visibility
+ * overrides on top of the global settings.
+ * piece.vis: null (= use global) | { stitch, cut, dims } booleans
+ */
+export function getItemParams(piece) {
+  const p = getParams();
+  const vis = piece?.vis;
+  if (!vis) return p;
+  return {
+    ...p,
+    showStitchLine: vis.stitch !== undefined ? vis.stitch : p.showStitchLine,
+    showCutOutline: vis.cut    !== undefined ? vis.cut    : p.showCutOutline,
+    showDimensions: vis.dims   !== undefined ? vis.dims   : p.showDimensions,
+  };
 }
 
 export function onParamsChange(fn) {

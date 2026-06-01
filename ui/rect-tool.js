@@ -3,7 +3,7 @@
 
 import { placeMarks, snapToStitches } from '../engine/stitch.js';
 import { offsetPolyline } from '../engine/offset.js';
-import { getParams } from './controls.js';
+import { getParams, getItemParams } from './controls.js';
 import { px, toMm, createMark } from './render.js';
 
 const HANDLE_PX   = 8;   // handle square side length in px
@@ -121,6 +121,9 @@ export function redrawAllRects() {
   if (_selected) _showHandles(_selected);
 }
 
+// Returns the live selected rect object (for vis override and direct mutation).
+export function getSelectedRectRef() { return _selected; }
+
 // Returns a snapshot of the selected rect (including edge states) for the Piece tab.
 export function getSelectedRect() {
   if (!_selected) return null;
@@ -229,7 +232,7 @@ function _edgePts(rect, side) {
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 function _renderRect(rect) {
-  const { pitch, margin, markType, showStitchLine, showCutOutline } = getParams();
+  const { pitch, margin, markType, showStitchLine, showCutOutline } = getItemParams(rect);
   const { x, y, w, h } = rect;
   const items = [];
 

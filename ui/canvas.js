@@ -4,7 +4,7 @@
 import { placeMarks, snapToStitches } from '../engine/stitch.js';
 import { initOffset, offsetPolyline, getClipperModule } from '../engine/offset.js';
 import Clipper2Factory from '../vendor/clipper2z.js';
-import { initControls, getParams, onParamsChange } from './controls.js';
+import { initControls, getParams, getItemParams, onParamsChange } from './controls.js';
 import { initPolyTool, activatePolyMode, activateTrapMode, deactivatePolyMode,
          redrawAllPolys, getPolyStats, getAllPolys,
          getSelectedPoly, rerenderPoly, selectPoly } from './poly-tool.js';
@@ -18,8 +18,8 @@ import { rerenderOval, moveOvalBy } from './oval-tool.js';
 import { movePolyBy } from './poly-tool.js';
 import { downloadSVG } from './export.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
-         redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
-         copySelectedRect, pasteRect, flipSelectedRect,
+         redrawAllRects, getRectStats, getSelectedRect, getSelectedRectRef,
+         toggleSelectedEdge, copySelectedRect, pasteRect, flipSelectedRect,
          getAllRects, moveRectTo, deleteRect as _deleteRectItem,
          getRectSnapPoints } from './rect-tool.js';
 import { px, toMm, createMark } from './render.js';
@@ -146,6 +146,32 @@ export function handleTraceMouseUp() {
   return false;
 }
 
+// ── H/V midpoint crosshair guides ────────────────────────────────────────────
+// Thin guide lines through the centre of the selected piece — not printed.
+
+let _midGuideItems = [];
+
+function _showMidGuides(bbox) {
+  _clearMidGuides();
+  if (!getParams().showMidGuides || !bbox) return;
+  const cx = (bbox.minX + bbox.maxX) / 2;
+  const cy = (bbox.minY + bbox.maxY) / 2;
+  const cw = toMm(wrap.offsetWidth);
+  const ch = toMm(wrap.offsetHeight);
+
+  handleLayer.activate();
+  const style = { strokeColor: 'rgba(44,123,182,0.25)', strokeWidth: 0.75, dashArray: [3, 4] };
+  _midGuideItems = [
+    new paper.Path({ segments: [[0, px(cy)], [px(cw), px(cy)]], ...style }),
+    new paper.Path({ segments: [[px(cx), 0], [px(cx), px(ch)]], ...style }),
+  ];
+}
+
+function _clearMidGuides() {
+  _midGuideItems.forEach(i => i.remove());
+  _midGuideItems = [];
+}
+
 // ── Grid overlay (CSS background — no paper.js objects, excluded from SVG) ───
 
 function updateGridOverlay() {
@@ -266,8 +292,8 @@ function snapPolyline(pts, targetLength) {
   }));
 }
 
-function renderPiece(pts) {
-  const { pitch, margin, markType, showDimensions, showStitchLine, showCutOutline } = getParams();
+function renderPiece(pts, pieceRef = null) {
+  const { pitch, margin, markType, showDimensions, showStitchLine, showCutOutline } = getItemParams(pieceRef || {});
   const items = [];
 
   let rawLen = 0;
@@ -334,7 +360,7 @@ function renderPiece(pts) {
 function redrawAll() {
   pieces.forEach(piece => piece.items.forEach(item => item.remove()));
   pieces.forEach(piece => {
-    const { items, count, markCount, snappedPts } = renderPiece(piece.pts);
+    const { items, count, markCount, snappedPts } = renderPiece(piece.pts, piece);
     piece.items      = items;
     piece.count      = count;
     piece.markCount  = markCount;
@@ -440,8 +466,11 @@ function updateSelInfo() {
   if (!el) return;
   const { margin, pitch } = getParams();
 
-  // ── Rect selected ──────────────────────────────────────────────────────────
-  const ri = getSelectedRect();
+  // ── Rect selected (via rect-tool or Select tool) ─────────────────────────
+  const liveRectSel = getSelectedRectRef() || _multiSel.find(s=>s.kind==='rect')?.ref;
+  const ri = liveRectSel
+    ? { x:liveRectSel.x, y:liveRectSel.y, w:liveRectSel.w, h:liveRectSel.h, edges:{...liveRectSel.edges} }
+    : getSelectedRect();
   if (ri) {
     const { count: wCount } = _stitchCount(ri.w, pitch);
     const { count: hCount } = _stitchCount(ri.h, pitch);
@@ -496,17 +525,23 @@ function updateSelInfo() {
         <button class="mate-assign-btn" disabled>Assign mate edge…</button>
       </div>`;
 
-    // Wire edge buttons
+    // Wire edge buttons and vis override
     el.querySelectorAll('[data-piece-edge]').forEach(btn => {
-      btn.addEventListener('click', () => {
-        toggleSelectedEdge(btn.dataset.pieceEdge);
-      });
+      btn.addEventListener('click', () => toggleSelectedEdge(btn.dataset.pieceEdge));
     });
+    // Append vis override — live ref from multi-select or rect-tool selection
+    const liveRect = getSelectedRectRef()
+      || _multiSel.find(s => s.kind === 'rect')?.ref;
+    if (liveRect) {
+      el.insertAdjacentHTML('beforeend', _visOverrideHtml(liveRect));
+      _wireVisOverride(el, liveRect, () => redrawAll());
+    }
     return;
   }
 
   // ── Polygon (T-pocket or generic) selected ────────────────────────────────
-  const selPoly = getSelectedPoly();
+  const selPoly = getSelectedPoly()
+    || _multiSel.find(s => s.kind === 'poly')?.ref;
   if (selPoly) {
     if (selPoly.tpocketParams) {
       // ── T-Pocket template ──────────────────────────────────────────────────
@@ -572,6 +607,8 @@ function updateSelInfo() {
           </div>
         </div>`;
     }
+    el.insertAdjacentHTML('beforeend', _visOverrideHtml(selPoly));
+    _wireVisOverride(el, selPoly, () => redrawAll());
     return;
   }
 
@@ -596,10 +633,65 @@ function updateSelInfo() {
           <div class="piece-field"><div class="piece-field-label">Marks</div><div class="piece-field-val secondary">${p.markCount}</div></div>
         </div>
       </div>`;
+    el.insertAdjacentHTML('beforeend', _visOverrideHtml(p));
+    _wireVisOverride(el, p, () => redrawAll());
     return;
   }
 
   el.innerHTML = '<div class="piece-empty">Select a piece to see its properties</div>';
+}
+
+// ── Per-piece visibility override UI ─────────────────────────────────────────
+
+function _visOverrideHtml(piece) {
+  const v = piece.vis;
+  const p = getParams();
+  const on  = !!v;
+  const st  = on ? v.stitch : p.showStitchLine;
+  const cut = on ? v.cut    : p.showCutOutline;
+  const dim = on ? v.dims   : p.showDimensions;
+  return `
+    <div class="piece-section">
+      <div class="piece-section-label">Visibility override</div>
+      <div class="toggle-row">
+        <span>Override global</span>
+        <button class="toggle-switch ${on?'active':''}" id="pi-vis-ov"></button>
+      </div>
+      <div id="pi-vis-sub" style="${on?'':'display:none'}">
+        <div class="toggle-row"><span style="padding-left:8px;font-size:11px">Stitch line</span>
+          <button class="toggle-switch ${st?'active':''}" id="pi-vis-st"></button></div>
+        <div class="toggle-row"><span style="padding-left:8px;font-size:11px">Cut outline</span>
+          <button class="toggle-switch ${cut?'active':''}" id="pi-vis-cut"></button></div>
+        <div class="toggle-row"><span style="padding-left:8px;font-size:11px">Dimensions</span>
+          <button class="toggle-switch ${dim?'active':''}" id="pi-vis-dim"></button></div>
+      </div>
+    </div>`;
+}
+
+function _wireVisOverride(el, piece, rerenderFn) {
+  const ovBtn = el.querySelector('#pi-vis-ov');
+  const sub   = el.querySelector('#pi-vis-sub');
+  if (!ovBtn) return;
+
+  ovBtn.addEventListener('click', () => {
+    if (piece.vis) {
+      piece.vis = null;
+    } else {
+      const p = getParams();
+      piece.vis = { stitch: p.showStitchLine, cut: p.showCutOutline, dims: p.showDimensions };
+    }
+    rerenderFn();
+    updateSelInfo();
+  });
+
+  [['#pi-vis-st','stitch'],['#pi-vis-cut','cut'],['#pi-vis-dim','dims']].forEach(([id, key]) => {
+    el.querySelector(id)?.addEventListener('click', () => {
+      if (!piece.vis) return;
+      piece.vis[key] = !piece.vis[key];
+      rerenderFn();
+      updateSelInfo();
+    });
+  });
 }
 
 // Helper: stitch count for a dimension
@@ -1002,10 +1094,13 @@ selectTool.onMouseDown = (event) => {
   if (hit) {
     if (!event.modifiers?.shift) {
       // Single select — clear previous, select this
-      _msClear(); _deselectFreehand();
+      _msClear(); _deselectFreehand(); _clearMidGuides();
     }
     if (hit.kind === 'freehand' && !_msIn(hit.ref)) _selectFreehand(hit.ref);
     _msAdd(hit.kind, hit.ref);
+    // Show centre guides for single selection
+    if (_multiSel.length === 1) _showMidGuides(_pieceBBox(hit));
+    updateSelInfo(); // populate Piece tab for any object type
 
     // Snapshot positions for drag
     const origData = {};
@@ -1019,7 +1114,7 @@ selectTool.onMouseDown = (event) => {
     _selDrag = { startPt: event.point, origData };
     _syncEditBtns();
   } else {
-    _msClear(); _deselectFreehand();
+    _msClear(); _deselectFreehand(); _clearMidGuides();
     _selDrag = null;
     _syncEditBtns();
   }
@@ -1056,6 +1151,8 @@ selectTool.onMouseDrag = (event) => {
     }
   });
   _drawSelBox();
+  // Update mid guides to follow moving piece (single selection only)
+  if (_multiSel.length === 1) _showMidGuides(_pieceBBox(_multiSel[0]));
 };
 
 selectTool.onMouseUp = () => {

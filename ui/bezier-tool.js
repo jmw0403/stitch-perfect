@@ -14,7 +14,7 @@
 import { placeMarks } from '../engine/stitch.js';
 import { offsetPolyline } from '../engine/offset.js';
 import { flattenCubic } from '../engine/flatten.js';
-import { getParams } from './controls.js';
+import { getParams, getItemParams } from './controls.js';
 import { px, toMm, createMark } from './render.js';
 
 const ANCHOR_PX  = 7;   // anchor square half-size
@@ -250,7 +250,7 @@ function _angleSnap45(fromMm, toMm_) {
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 function _renderBezier(bz) {
-  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getParams();
+  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getItemParams(bz);
   const items = [];
   const pts = flattenSegs(bz.segs, bz.closed);
   if (pts.length < 2) return items;

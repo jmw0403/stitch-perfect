@@ -3,7 +3,7 @@
 
 import { placeMarks } from '../engine/stitch.js';
 import { offsetPolyline } from '../engine/offset.js';
-import { getParams } from './controls.js';
+import { getParams, getItemParams } from './controls.js';
 import { px, toMm, createMark } from './render.js';
 
 const HANDLE_PX = 8;
@@ -135,7 +135,7 @@ export function moveOvalBy(oval, dx, dy) {
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 function _renderOval(oval) {
-  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getParams();
+  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getItemParams(oval);
   const { cx, cy, rx, ry, edge } = oval;
   const items = [];
   const polyPts = ellipsePolyline(cx, cy, rx, ry);
