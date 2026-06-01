@@ -16,7 +16,9 @@ import { initBezierTool, initBezierToolLayers, activateBezierMode, deactivateBez
          redrawAllBeziers, getBezierStats, getAllBeziers, rerenderBezier, moveBezierBy } from './bezier-tool.js';
 import { rerenderOval, moveOvalBy } from './oval-tool.js';
 import { movePolyBy } from './poly-tool.js';
-import { downloadSVG } from './export.js';
+import { downloadSVG, setAnnotationExporter } from './export.js';
+import { initAnnotationTool, activateAnnotationMode, deactivateAnnotationMode,
+         getAllAnnotations, redrawAllAnnotations, annotationsToSVG } from './annotation-tool.js';
 import { downloadTiledPages, getPagePreview, computePageLayout } from './print.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, getSelectedRectRef,
@@ -269,6 +271,8 @@ initBezierTool(
   (bz) => { _zRemove(bz); },
 );
 initBezierToolLayers({ cutLayer, stitchLayer, markLayer, handleLayer });
+initAnnotationTool({ cutLayer, stitchLayer, markLayer, handleLayer }, () => { updateStatus(); });
+setAnnotationExporter(() => annotationsToSVG());
 
 // ── Freehand pieces ───────────────────────────────────────────────────────────
 // { pts: [{x,y}], items: paper.Item[], count: number, markCount: number }
@@ -371,6 +375,7 @@ function redrawAll() {
   redrawAllPolys();
   redrawAllOvals();
   redrawAllBeziers();
+  redrawAllAnnotations();
   deduplicateCorners();
   updateGridOverlay();
   updatePageOverlay();
@@ -1227,6 +1232,8 @@ const HINTS = {
   trap:     'Drag to draw trapezoid &nbsp;·&nbsp; Click edge to cycle state &nbsp;·&nbsp; Drag corner to reshape',
   oval:     'Drag to draw oval &nbsp;·&nbsp; Click oval to select &nbsp;·&nbsp; Drag cardinal handle to resize',
   bezier:   'Click = corner &nbsp;·&nbsp; Click+drag = smooth curve &nbsp;·&nbsp; Shift = angle-snap &nbsp;·&nbsp; Click start or Enter to close &nbsp;·&nbsp; Backspace = undo last anchor',
+  text:     'Click on canvas to place a text label &nbsp;·&nbsp; Drag to move &nbsp;·&nbsp; Delete to remove',
+  dim:      'Click first point &nbsp;·&nbsp; Click second point to place dimension line &nbsp;·&nbsp; Drag to move &nbsp;·&nbsp; Delete to remove',
 };
 
 let _activeTool = 'select';
@@ -1245,7 +1252,7 @@ document.querySelectorAll('#tool-btns [data-tool]').forEach(btn => {
     if (name === 'select') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
       _deselectFreehand(); deactivateRectMode(); deactivatePolyMode();
-      deactivateOvalMode(); deactivateBezierMode();
+      deactivateOvalMode(); deactivateBezierMode(); deactivateAnnotationMode();
       selectTool.activate();
     } else if (name === 'rect') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
@@ -1267,8 +1274,19 @@ document.querySelectorAll('#tool-btns [data-tool]').forEach(btn => {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
       _deselectFreehand(); deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode();
       activateBezierMode();
+    } else if (name === 'text') {
+      clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
+      _deselectFreehand(); deactivateRectMode(); deactivatePolyMode();
+      deactivateOvalMode(); deactivateBezierMode();
+      activateAnnotationMode('text');
+    } else if (name === 'dim') {
+      clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
+      _deselectFreehand(); deactivateRectMode(); deactivatePolyMode();
+      deactivateOvalMode(); deactivateBezierMode();
+      activateAnnotationMode('dim');
     } else { // freehand (Line)
-      deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode(); deactivateBezierMode();
+      deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode();
+      deactivateBezierMode(); deactivateAnnotationMode();
       freehandTool.activate();
     }
     setTool(name);
