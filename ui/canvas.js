@@ -7,6 +7,7 @@ import Clipper2Factory from '../vendor/clipper2z.js';
 import { initControls, getParams, onParamsChange } from './controls.js';
 import { initPolyTool, activatePolyMode, deactivatePolyMode,
          redrawAllPolys, getPolyStats, getAllPolys } from './poly-tool.js';
+import { downloadSVG } from './export.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
          copySelectedRect, pasteRect, flipSelectedRect,
@@ -753,6 +754,11 @@ function _flipSelected(axis) {
     updateStatus(); updateSelInfo();
   }
 }
+
+// Wire View tab Export buttons
+document.getElementById('btn-export-svg')?.addEventListener('click', () => {
+  downloadSVG(pieces, getAllRects(), getAllPolys());
+});
 
 // Wire Shapes tab Edit buttons
 document.getElementById('btn-copy')  ?.addEventListener('click', _copySelected);
