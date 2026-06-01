@@ -609,6 +609,73 @@ it across multiple pages automatically.
 - [ ] Templates stored in localStorage (no server needed)
 - [ ] Export template as JSON file; import from JSON
 
+### Phase 3.7 — Bezier Pen Tool + Workflow Improvements
+*(Inspired by LeatherCraft CAD feature audit — ref coffee-craft.net)*
+
+#### Bezier Pen Tool
+The single biggest gap vs. LeatherCraft CAD. Needed for: curved gussets,
+oval purse bodies, shoulder straps, any organic leather shape.
+
+**Interaction (Illustrator-style):**
+- **Click** = corner anchor (no handles, sharp point)
+- **Click+drag** = smooth anchor (drag sets forward handle; backward mirror auto)
+- **Shift+click/drag** = angle-snap to 45° increments from previous anchor
+- **Click near first anchor** OR **Enter** = close the shape
+- **Escape** = cancel draw; **Backspace** = remove last placed anchor
+
+**After commit:**
+- Anchors and handles shown as draggable items (blue anchor squares, handle circles)
+- Drag anchor = moves that point; drag handle circle = reshapes that curve segment
+- The handle pair stays symmetric (G1 continuity) unless Alt+drag to break symmetry
+- Edge states per segment: stitched / open / hidden (click segment to cycle)
+
+**Engine integration:**
+- Each bezier piece stores: `segs: [{pt, handleIn, handleOut}]`, `closed: bool`
+- `flatten.js` flattenCubic already handles the curve→polyline conversion
+- placeMarks runs on the flattened polyline (arc-length spacing, already correct)
+- Cut outline: offsetPolyline on flattened polyline (open = capsule, closed = polygon)
+
+#### Workflow Improvements
+
+**Shift+drag angle constraint (all tools)**
+- When Shift is held while placing a vertex or anchor, the new point snaps to
+  0°, 45°, 90°, 135°, 180°, 225°, 270°, or 315° relative to the previous point
+- Applies to: freehand Line tool, Bezier pen, Poly tool vertex placement
+- Critical for drawing horizontal/vertical stitching guides precisely
+
+**Alignment tools (Edit section, Shapes tab)**
+- Align Left / Right / Top / Bottom — aligns all selected pieces to the extreme edge
+- Align Center H / Center V — centers all selected pieces
+- Distribute H / Distribute V — equal spacing between selected pieces
+- Operates on the full multi-select set (_multiSel)
+
+**Coordinate input (Piece tab)**
+- When a piece is selected, X/Y in the Piece tab become editable fields
+- Type exact mm value → piece jumps to that position (already partially done for rect)
+- Keyboard shortcut: press Tab to jump between X and Y inputs
+
+**Image / PDF tracing background**
+- "Import Trace Image" button in the View tab (or a floating toolbar button)
+- Accepts PNG, JPG; PDF support deferred (requires PDF.js or server-side render)
+- Imported image displayed at 50% opacity on a locked background layer
+- User can: move, scale (drag corners), rotate the trace image
+- Undo/redo supported for all trace image operations
+- Trace image NOT included in SVG export — it is a guide only
+- Primary use: import a scan of an existing purchased pattern and trace over it
+  with the Bezier / Poly tools to reproduce it digitally
+
+**Arc tool (Shapes section)**
+- Draw circular arcs by: click center, click radius point, drag to set arc angle
+- Alternative: 3-point arc (click start, click end, drag midpoint to set curve)
+- Arc can be combined with straight lines (same as poly tool)
+- Arc segments automatically get arc-length mark spacing via flatten.js
+
+**Layer system (View tab)**
+- Named layers (e.g. "Body", "Pockets", "Construction lines")
+- Toggle layer visibility; lock layer to prevent accidental edits
+- Objects assigned to a layer by default or via Piece tab dropdown
+- Layer order determines Z-order within the layer
+
 ### Phase 4.5 — Annotations (text boxes, title, footer)
 
 Pattern sheets need identifying information for printing, cutting, and
