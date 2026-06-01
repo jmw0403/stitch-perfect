@@ -27,9 +27,14 @@ const _dimLabelEl = () => document.getElementById('dim-label');
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
-export function initRectTool(layers, onChangeFn) {
+let _onRectAdded   = () => {};
+let _onRectDeleted = () => {};
+
+export function initRectTool(layers, onChangeFn, onAddedFn, onDeletedFn) {
   _layers = layers;
-  if (onChangeFn) _onChange = onChangeFn;
+  if (onChangeFn)  _onChange      = onChangeFn;
+  if (onAddedFn)   _onRectAdded   = onAddedFn;
+  if (onDeletedFn) _onRectDeleted = onDeletedFn;
 
   const tool = new paper.Tool();
 
@@ -150,6 +155,7 @@ export function deleteRect(rect) {
   rect.items.forEach(i => i.remove());
   const idx = _rects.indexOf(rect);
   if (idx !== -1) _rects.splice(idx, 1);
+  _onRectDeleted(rect);
   _onChange();
 }
 
@@ -498,6 +504,7 @@ function _commitDraw() {
   rect.items = _renderRect(rect);
   _rects.push(rect);
   _selectRect(rect);
+  _onRectAdded(rect);
   _onChange();
 }
 

@@ -46,7 +46,12 @@ const stitchLayer = new paper.Layer();
 const markLayer   = new paper.Layer();
 const handleLayer = new paper.Layer(); // always on top — resize handles
 
-initRectTool({ cutLayer, stitchLayer, markLayer, handleLayer }, () => { updateStatus(); updateSelInfo(); });
+initRectTool(
+  { cutLayer, stitchLayer, markLayer, handleLayer },
+  () => { updateStatus(); updateSelInfo(); },
+  (rect) => { _zAdd('rect', rect); },           // called when a new rect is committed
+  (rect) => { _zRemove(rect); },                // called when a rect is deleted
+);
 
 // ── Freehand pieces ───────────────────────────────────────────────────────────
 // { pts: [{x,y}], items: paper.Item[], count: number, markCount: number }
@@ -369,6 +374,88 @@ function _showFhSnapAt(mmPt) {
   _fhSnapIndicator.fillColor   = null;
 }
 
+// ── Z-order ───────────────────────────────────────────────────────────────────
+// _zOrder is a flat array in draw order: index 0 = bottommost, last = topmost.
+// When a piece is committed it's appended (goes to top).
+
+const _zOrder = []; // Array<{kind:'freehand'|'rect', ref}>
+
+function _zAdd(kind, ref)   { _zOrder.push({ kind, ref }); }
+function _zRemove(ref)      { const i = _zOrder.findIndex(z => z.ref === ref); if (i !== -1) _zOrder.splice(i, 1); }
+function _zIndexOf(ref)     { return _zOrder.findIndex(z => z.ref === ref); }
+
+// Bring a piece one step forward (toward top of stack)
+function _zBringForward(ref) {
+  const i = _zIndexOf(ref);
+  if (i < _zOrder.length - 1) {
+    [_zOrder[i], _zOrder[i + 1]] = [_zOrder[i + 1], _zOrder[i]];
+  }
+}
+
+// Send a piece one step back (toward bottom of stack)
+function _zSendBack(ref) {
+  const i = _zIndexOf(ref);
+  if (i > 0) {
+    [_zOrder[i], _zOrder[i - 1]] = [_zOrder[i - 1], _zOrder[i]];
+  }
+}
+
+// Find all pieces hit by point, sorted top→bottom (highest z-index first)
+function _zHitAll(point) {
+  const hits = [];
+  for (const { kind, ref } of _zOrder) {
+    let hit = false;
+    if (kind === 'freehand') {
+      hit = !!ref.items[0]?.hitTest(point, { stroke: true, tolerance: 8 });
+    } else {
+      // For rects, check if point is near any edge
+      const { x, y, w, h } = ref;
+      const { margin } = getParams();
+      hit = point.x >= px(x - margin) - 8 && point.x <= px(x + w + margin) + 8 &&
+            point.y >= px(y - margin) - 8 && point.y <= px(y + h + margin) + 8;
+    }
+    if (hit) hits.push({ kind, ref, z: _zIndexOf(ref) });
+  }
+  return hits.sort((a, b) => b.z - a.z); // topmost first
+}
+
+// Cycle variable — tracks which index in the hit list was last selected
+let _zCyclePoint = null;
+let _zCycleIdx   = 0;
+
+function _zAltClick(point) {
+  const hits = _zHitAll(point);
+  if (hits.length === 0) return;
+
+  // If same point as last alt-click, advance the cycle; otherwise restart
+  const samePoint = _zCyclePoint &&
+    Math.abs(point.x - _zCyclePoint.x) < 5 &&
+    Math.abs(point.y - _zCyclePoint.y) < 5;
+  if (!samePoint) _zCycleIdx = 0;
+  else _zCycleIdx = (_zCycleIdx + 1) % hits.length;
+  _zCyclePoint = point;
+
+  const target = hits[_zCycleIdx];
+  _msClear();
+  _deselectFreehand();
+  if (target.kind === 'freehand') { _selectFreehand(target.ref); }
+  else {
+    // Select the rect — mimic clicking on it inside rect-tool
+    // We do this by delegating to the rect tool; for now just show in piece tab
+    updateSelInfo();
+  }
+}
+
+// Wire Bring Fwd / Send Back buttons
+document.getElementById('btn-fwd') ?.addEventListener('click', () => {
+  const ri = getSelectedRect(); if (ri) _zBringForward(ri); // ref is the rect object
+  if (_selFreehand) _zBringForward(_selFreehand);
+});
+document.getElementById('btn-back')?.addEventListener('click', () => {
+  const ri = getSelectedRect(); if (ri) _zSendBack(ri);
+  if (_selFreehand) _zSendBack(_selFreehand);
+});
+
 // ── Multi-select + Group ──────────────────────────────────────────────────────
 //
 // _multiSel  : Array<{kind:'freehand'|'rect', ref, origX, origY}>
@@ -560,7 +647,9 @@ function finalizePath(path) {
   if (pts.length < 2) return;
 
   const { items, count, markCount, snappedPts } = renderPiece(pts);
-  pieces.push({ pts, items, count, markCount, snappedPts });
+  const piece = { pts, items, count, markCount, snappedPts };
+  pieces.push(piece);
+  _zAdd('freehand', piece);
   deduplicateCorners();
   updateStatus();
 }
@@ -695,6 +784,12 @@ function cancelDraw() {
 const freehandTool = new paper.Tool();
 
 freehandTool.onMouseDown = (event) => {
+  // Alt+click: cycle through overlapping objects
+  if (event.modifiers?.alt) {
+    _zAltClick(event.point);
+    return;
+  }
+
   // If not drawing: check for piece hit first
   if (!activePath) {
     const hit = _findFreehandAt(event.point);
