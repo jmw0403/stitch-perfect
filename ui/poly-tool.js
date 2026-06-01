@@ -198,13 +198,20 @@ export function redrawAllPolys() {
 }
 
 export function getPolyStats() {
-  const { pitch } = getParams();
+  const { pitch, margin } = getParams();
   let stitches = 0, marks = 0;
   _polys.forEach(poly => {
     poly.edges.forEach((state, i) => {
       if (state !== 'stitched') return;
-      const pts = _edgePts(poly, i);
-      const { count } = placeMarks(pts, pitch);
+      const [a, b] = _edgePts(poly, i);
+      let stPts = [a, b];
+      if (poly.tpocketParams) {
+        // Use inset pts for accurate stitch count
+        const { nx, ny } = _inwardNormal(a, b);
+        stPts = [{ x: a.x + nx*margin, y: a.y + ny*margin },
+                 { x: b.x + nx*margin, y: b.y + ny*margin }];
+      }
+      const { count } = placeMarks(stPts, pitch);
       stitches += count; marks += count + 1;
     });
   });
@@ -269,7 +276,91 @@ function _buildCutOutline(poly) {
   return clean;
 }
 
+// ── T-pocket cut-first rendering ─────────────────────────────────────────────
+// The drawn pts ARE the cut outline. Stitch line + marks sit INSIDE, inset
+// by margin using the edge's inward normal (CW polygon convention).
+
+function _inwardNormal(a, b) {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len = Math.sqrt(dx * dx + dy * dy);
+  if (len < 0.001) return { nx: 0, ny: 0, len: 0 };
+  // CW polygon in screen coords (y-down): inward normal = (-dy, dx) / len
+  return { nx: -dy / len, ny: dx / len, len };
+}
+
+function _renderTPocketCutFirst(poly) {
+  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getParams();
+  const { pts, edges } = poly;
+  const n = pts.length;
+  const items = [];
+  const hasStitch = edges.some(e => e === 'stitched');
+
+  // The drawn polygon IS the cut outline — draw it directly
+  if (showCutOutline) {
+    _layers.cutLayer.activate();
+    const cutPath = new paper.Path({
+      segments: pts.map(p => new paper.Point(px(p.x), px(p.y))),
+      closed: true,
+      strokeColor: hasStitch ? '#aaa' : '#555',
+      strokeWidth:  hasStitch ? 0.75 : 1,
+    });
+    if (hasStitch) cutPath.dashArray = [4, 3];
+    items.push(cutPath);
+  }
+
+  // Per-edge: stitch line and marks are INSET from the cut outline by margin
+  for (let i = 0; i < n; i++) {
+    const a = pts[i], b = pts[(i + 1) % n];
+    const state = edges[i];
+    if (state !== 'stitched') continue;
+
+    const { nx, ny, len } = _inwardNormal(a, b);
+    if (len === 0) continue;
+
+    // Stitch endpoints — inset from the cut edge
+    const as = { x: a.x + nx * margin, y: a.y + ny * margin };
+    const bs = { x: b.x + nx * margin, y: b.y + ny * margin };
+    const edgeAngle = Math.atan2(b.y - a.y, b.x - a.x);
+
+    if (showStitchLine) {
+      _layers.stitchLayer.activate();
+      items.push(new paper.Path({
+        segments: [new paper.Point(px(as.x), px(as.y)), new paper.Point(px(bs.x), px(bs.y))],
+        strokeColor: '#2c7bb6',
+        strokeWidth: 1,
+      }));
+    }
+
+    // Marks on the inset stitch line
+    _layers.markLayer.activate();
+    const sMark = { x: as.x, y: as.y, angle: edgeAngle };
+    const eMark = { x: bs.x, y: bs.y, angle: edgeAngle };
+    const { marks } = placeMarks([as, bs], pitch);
+    for (const m of marks) items.push(createMark(m, markType));
+
+    // Dimension label outside the cut edge (outward direction = -inward)
+    if (showDimensions) {
+      const { snappedLength } = snapToStitches(len, pitch);
+      const ox = (a.x + b.x) / 2 + (-nx) * (margin + 2.5); // outward offset
+      const oy = (a.y + b.y) / 2 + (-ny) * (margin + 2.5);
+      _layers.stitchLayer.activate();
+      items.push(new paper.PointText({
+        point: new paper.Point(px(ox), px(oy)),
+        content: `${snappedLength.toFixed(1)} mm`,
+        fontSize: 9,
+        fillColor: '#4a8ab5',
+        justification: 'center',
+      }));
+    }
+  }
+
+  return items;
+}
+
 function _renderPoly(poly) {
+  // T-pocket: pts = cut outline, stitch inset by margin (cut-first model)
+  if (poly.tpocketParams) return _renderTPocketCutFirst(poly);
+
   const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getParams();
   const items = [];
   const n = poly.pts.length;
