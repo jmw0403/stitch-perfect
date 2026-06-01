@@ -318,7 +318,12 @@ function _inwardNormal(a, b) {
 
 function _renderTPocketCutFirst(poly) {
   const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getParams();
-  const { pts, edges } = poly;
+  const { pts } = poly;
+  // Enforce T-pocket constraints: top edge (0) always hidden, shoulders (2,6) always hidden
+  const edges = [...poly.edges];
+  edges[0] = 'hidden';
+  edges[2] = 'hidden';
+  edges[6] = 'hidden';
   const n = pts.length;
   const items = [];
   const hasStitch = edges.some(e => e === 'stitched');
@@ -331,7 +336,7 @@ function _renderTPocketCutFirst(poly) {
       closed: true,
       strokeColor: hasStitch ? '#aaa' : '#555',
       strokeWidth:  hasStitch ? 0.75 : 1,
-      strokeJoin: 'miter',   // sharp right-angle corners
+      strokeJoin: 'miter', miterLimit: 20,   // sharp right-angle corners
       strokeCap:  'square',
     });
     if (hasStitch) cutPath.dashArray = [4, 3];
@@ -405,7 +410,7 @@ function _renderPoly(poly) {
       closed: true,
       strokeColor: hasStitch ? '#aaa' : '#555',
       strokeWidth:  hasStitch ? 0.75 : 1,
-      strokeJoin: 'miter',
+      strokeJoin: 'miter', miterLimit: 20,
     });
     if (hasStitch) cutPath.dashArray = [4, 3];
     items.push(cutPath);
@@ -570,6 +575,8 @@ function _hitEdge(poly, point) {
 const _EDGE_CYCLE = { stitched: 'open', open: 'hidden', hidden: 'stitched' };
 
 function _toggleEdge(poly, idx) {
+  // T-pocket: top edge (index 0) is the pocket mouth — never stitchable
+  if (poly.tpocketParams && idx === 0) return;
   poly.edges[idx] = _EDGE_CYCLE[poly.edges[idx]] ?? 'open';
   poly.items.forEach(i => i.remove());
   poly.items = _renderPoly(poly);

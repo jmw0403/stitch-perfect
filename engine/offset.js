@@ -17,6 +17,9 @@ let C = null; // initialized Clipper2 module instance
  *
  * @param {Function} factory - default export from clipper2-wasm
  */
+/** Returns the initialized Clipper2 module (for direct use of Union, etc.) */
+export function getClipperModule() { return C; }
+
 export async function initOffset(factory) {
   C = await factory();
 }

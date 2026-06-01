@@ -2,7 +2,7 @@
 // `paper` is available as a global (loaded via <script> before this module)
 
 import { placeMarks, snapToStitches } from '../engine/stitch.js';
-import { initOffset, offsetPolyline } from '../engine/offset.js';
+import { initOffset, offsetPolyline, getClipperModule } from '../engine/offset.js';
 import Clipper2Factory from '../vendor/clipper2z.js';
 import { initControls, getParams, onParamsChange } from './controls.js';
 import { initPolyTool, activatePolyMode, activateTrapMode, deactivatePolyMode,
@@ -776,7 +776,8 @@ function _pieceBBox({ kind, ref }) {
 
 function _drawSelBox() {
   if (_selBoxItem) { _selBoxItem.remove(); _selBoxItem = null; }
-  if (_multiSel.length < 2) return;
+  if (_multiSel.length === 0) return;
+  // Single selection: show a solid orange highlight; multi: dashed blue
 
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   _multiSel.forEach(s => {
@@ -786,14 +787,15 @@ function _drawSelBox() {
   });
 
   handleLayer.activate();
+  const isSingle = _multiSel.length === 1;
   _selBoxItem = new paper.Path.Rectangle(
-    new paper.Point(px(minX) - 6, px(minY) - 6),
-    new paper.Size(px(maxX - minX) + 12, px(maxY - minY) + 12),
+    new paper.Point(px(minX) - 5, px(minY) - 5),
+    new paper.Size(px(maxX - minX) + 10, px(maxY - minY) + 10),
   );
-  _selBoxItem.strokeColor = '#5bb3f5';
-  _selBoxItem.strokeWidth = 1;
-  _selBoxItem.dashArray   = [4, 3];
-  _selBoxItem.fillColor   = null;
+  _selBoxItem.strokeColor = isSingle ? '#f39c12' : '#5bb3f5'; // orange=single, blue=multi
+  _selBoxItem.strokeWidth = isSingle ? 1.5 : 1;
+  _selBoxItem.dashArray   = isSingle ? null : [4, 3];
+  _selBoxItem.fillColor   = isSingle ? 'rgba(243,156,18,0.04)' : null;
 }
 
 // Group helpers
@@ -1285,6 +1287,85 @@ function _alignAll(axis) {
   updateStatus();
 }
 
+// ── Boolean Fuse (Union of two shapes) ───────────────────────────────────────
+// Combines two selected closed shapes using Clipper2 Union, then creates a new
+// poly from the result with all edges defaulting to 'stitched'.
+
+async function _fuseSelected() {
+  // Need exactly 2 closed shapes (rects or polys)
+  const sel = _multiSel.filter(s => s.kind === 'rect' || s.kind === 'poly');
+  if (sel.length !== 2) return;
+
+  const C = await getClipperModule();
+  if (!C) { console.warn('Clipper2 not ready'); return; }
+
+  function toPtsD(kind, ref) {
+    if (kind === 'rect') {
+      const { x, y, w, h } = ref;
+      return [{ x, y }, { x: x+w, y }, { x: x+w, y: y+h }, { x, y: y+h }];
+    }
+    return ref.pts;
+  }
+
+  const flat1 = toPtsD(sel[0].kind, sel[0].ref);
+  const flat2 = toPtsD(sel[1].kind, sel[1].ref);
+
+  // Build Clipper2 PathsD
+  function mkPaths(pts) {
+    const path = C.MakePathD(pts.flatMap(p => [p.x, p.y]));
+    const paths = new C.PathsD();
+    paths.push_back(path);
+    path.delete();
+    return paths;
+  }
+
+  const subj = mkPaths(flat1);
+  const clip  = mkPaths(flat2);
+  const result = C.UnionD(subj, clip, C.FillRule.NonZero, 4);
+
+  subj.delete(); clip.delete();
+
+  if (result.size() === 0) { result.delete(); return; }
+
+  // Extract the first (outer) ring from the result
+  const ring = result.get(0);
+  const newPts = [];
+  for (let i = 0; i < ring.size(); i++) {
+    const pt = ring.get(i);
+    newPts.push({ x: pt.x, y: pt.y });
+  }
+  result.delete();
+
+  if (newPts.length < 3) return;
+
+  // Remove internal duplicates
+  const clean = [newPts[0]];
+  for (let i = 1; i < newPts.length; i++) {
+    const p = newPts[i], q = clean[clean.length-1];
+    if (Math.abs(p.x-q.x) > 0.01 || Math.abs(p.y-q.y) > 0.01) clean.push(p);
+  }
+
+  // Create new poly — all edges stitched by default, user can toggle
+  const poly = {
+    pts:   clean,
+    edges: clean.map(() => 'stitched'),
+    items: [],
+  };
+
+  // Delete original two pieces
+  _msDeleteAll();
+
+  // Add fused poly
+  getAllPolys().push(poly);
+  _zAdd('poly', poly);
+  selectPoly(poly);
+  rerenderPoly(poly);
+  updateStatus();
+  updateSelInfo();
+}
+
+document.getElementById('btn-fuse')?.addEventListener('click', () => { _fuseSelected(); });
+
 // Wire align buttons (wired after HTML loads; IDs match index.html)
 document.getElementById('btn-align-left')   ?.addEventListener('click', () => _alignAll('left'));
 document.getElementById('btn-align-right')  ?.addEventListener('click', () => _alignAll('right'));
@@ -1313,6 +1394,9 @@ function _syncEditBtns() {
    'btn-align-bottom','btn-align-ch','btn-align-cv'].forEach(id => {
     const el = document.getElementById(id); if (el) el.disabled = !hasMulti;
   });
+  const fuseable = _multiSel.filter(s => s.kind === 'rect' || s.kind === 'poly').length === 2;
+  const fuseEl = document.getElementById('btn-fuse');
+  if (fuseEl) fuseEl.disabled = !fuseable;
 }
 _syncEditBtns();
 

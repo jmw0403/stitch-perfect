@@ -247,6 +247,7 @@ function _renderRect(rect) {
         closed: true,
         strokeColor: hasStitch ? '#aaa' : '#555',
         strokeWidth:  hasStitch ? 0.75 : 1,
+        strokeJoin: 'miter', miterLimit: 20,
       });
       if (hasStitch) cutPath.dashArray = [4, 3];
       items.push(cutPath);
