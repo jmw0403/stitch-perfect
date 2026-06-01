@@ -34,6 +34,7 @@
           <div class="pane-label">Draw</div>
           <div class="btn-group" id="tool-btns">
             <button data-tool="freehand" class="active">Line</button>
+            <button data-tool="bezier">Bezier</button>
             <button data-tool="rect">Rect</button>
             <button data-tool="oval">Oval</button>
             <button data-tool="trap">Trap</button>
@@ -57,6 +58,18 @@
             <button id="btn-flip-v" disabled>Flip V</button>
             <button id="btn-fwd"    disabled>Fwd ↑</button>
             <button id="btn-back"   disabled>Back ↓</button>
+          </div>
+        </div>
+
+        <div class="pane-section">
+          <div class="pane-label">Align <small style="color:#444">(select 2+)</small></div>
+          <div class="btn-group col-2">
+            <button id="btn-align-left"   disabled>⬅ Left</button>
+            <button id="btn-align-right"  disabled>➡ Right</button>
+            <button id="btn-align-top"    disabled>⬆ Top</button>
+            <button id="btn-align-bottom" disabled>⬇ Bottom</button>
+            <button id="btn-align-ch"     disabled>↔ Center</button>
+            <button id="btn-align-cv"     disabled>↕ Center</button>
           </div>
         </div>
 

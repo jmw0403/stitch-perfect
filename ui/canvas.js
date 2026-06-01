@@ -12,6 +12,8 @@ import { tpocketVertices, tpocketEdges, translatePts,
          clampParams, DEFAULT_PARAMS } from './tpocket.js';
 import { initOvalTool, activateOvalMode, deactivateOvalMode,
          redrawAllOvals, getOvalStats, getAllOvals } from './oval-tool.js';
+import { initBezierTool, initBezierToolLayers, activateBezierMode, deactivateBezierMode,
+         redrawAllBeziers, getBezierStats, getAllBeziers } from './bezier-tool.js';
 import { downloadSVG } from './export.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
@@ -143,6 +145,13 @@ initOvalTool(
   (oval) => { _zAdd('oval', oval); },
   (oval) => { _zRemove(oval); },
 );
+initBezierTool(
+  { cutLayer, stitchLayer, markLayer, handleLayer },
+  () => { updateStatus(); updateSelInfo(); },
+  (bz) => { _zAdd('bezier', bz); },
+  (bz) => { _zRemove(bz); },
+);
+initBezierToolLayers({ cutLayer, stitchLayer, markLayer, handleLayer });
 
 // ── Freehand pieces ───────────────────────────────────────────────────────────
 // { pts: [{x,y}], items: paper.Item[], count: number, markCount: number }
@@ -244,6 +253,7 @@ function redrawAll() {
   redrawAllRects();
   redrawAllPolys();
   redrawAllOvals();
+  redrawAllBeziers();
   deduplicateCorners();
   updateGridOverlay();
   updatePageOverlay();
@@ -261,13 +271,14 @@ function updateStatus() {
   const rs = getRectStats();
   const ps = getPolyStats();
   const os = getOvalStats();
-  const totalPieces   = pieces.length + rs.count + ps.count + os.count;
+  const bs = getBezierStats();
+  const totalPieces   = pieces.length + rs.count + ps.count + os.count + bs.count;
 
   if (totalPieces === 0) {
     statusEl.textContent = '';
   } else {
-    const totalStitches = pieces.reduce((s, p) => s + p.count, 0)    + rs.stitches + ps.stitches + os.stitches;
-    const totalMarks    = pieces.reduce((s, p) => s + p.markCount, 0) + rs.marks   + ps.marks   + os.marks;
+    const totalStitches = pieces.reduce((s, p) => s + p.count, 0)    + rs.stitches + ps.stitches + os.stitches + bs.stitches;
+    const totalMarks    = pieces.reduce((s, p) => s + p.markCount, 0) + rs.marks   + ps.marks   + os.marks   + bs.marks;
     statusEl.textContent = (totalPieces === 1 && pieces.length === 1)
       ? `Line – ${pieces[0].count} stitches`
       : `${totalPieces} piece${totalPieces > 1 ? 's' : ''} · ${totalStitches} stitches`;
@@ -830,11 +841,12 @@ function finalizePath(path) {
 
 const hintEl = document.getElementById('hint');
 const HINTS = {
-  freehand: 'Click to place points &nbsp;·&nbsp; Double-click to finish &nbsp;·&nbsp; Esc to cancel',
+  freehand: 'Click to place points &nbsp;·&nbsp; Shift = angle-snap &nbsp;·&nbsp; Double-click to finish &nbsp;·&nbsp; Esc to cancel',
   rect:     'Drag to draw &nbsp;·&nbsp; Click edge to toggle stitch/open &nbsp;·&nbsp; Drag corner to resize &nbsp;·&nbsp; Delete to remove',
-  poly:     'Click to place vertices &nbsp;·&nbsp; Click start point or Enter to close &nbsp;·&nbsp; Click edge to cycle state &nbsp;·&nbsp; Drag vertex to reshape',
+  poly:     'Click to place vertices &nbsp;·&nbsp; Shift = angle-snap &nbsp;·&nbsp; Click start or Enter to close &nbsp;·&nbsp; Click edge to cycle &nbsp;·&nbsp; Drag vertex to reshape',
   trap:     'Drag to draw trapezoid &nbsp;·&nbsp; Click edge to cycle state &nbsp;·&nbsp; Drag corner to reshape',
   oval:     'Drag to draw oval &nbsp;·&nbsp; Click oval to select &nbsp;·&nbsp; Drag cardinal handle to resize',
+  bezier:   'Click = corner &nbsp;·&nbsp; Click+drag = smooth curve &nbsp;·&nbsp; Shift = angle-snap &nbsp;·&nbsp; Click start or Enter to close &nbsp;·&nbsp; Backspace = undo last anchor',
 };
 
 let _activeTool = 'freehand';
@@ -864,10 +876,14 @@ document.querySelectorAll('#tool-btns [data-tool]').forEach(btn => {
       activateTrapMode();
     } else if (name === 'oval') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
-      _deselectFreehand(); deactivateRectMode(); deactivatePolyMode();
+      _deselectFreehand(); deactivateRectMode(); deactivatePolyMode(); deactivateBezierMode();
       activateOvalMode();
+    } else if (name === 'bezier') {
+      clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
+      _deselectFreehand(); deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode();
+      activateBezierMode();
     } else { // freehand
-      deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode();
+      deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode(); deactivateBezierMode();
       freehandTool.activate();
     }
     setTool(name);
@@ -973,6 +989,73 @@ document.getElementById('btn-export-svg')?.addEventListener('click', () => {
   downloadSVG(pieces, getAllRects(), getAllPolys());
 });
 
+// ── Alignment tools ───────────────────────────────────────────────────────────
+
+function _getBbox(kind, ref) {
+  if (kind === 'freehand') {
+    const xs = ref.pts.map(p => p.x), ys = ref.pts.map(p => p.y);
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+  }
+  if (kind === 'rect')    return { minX: ref.x, maxX: ref.x+ref.w, minY: ref.y, maxY: ref.y+ref.h };
+  if (kind === 'poly' || kind === 'bezier') {
+    const pts = kind === 'bezier' ? ref.segs.map(s => s.pt) : ref.pts;
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    return { minX: Math.min(...xs), maxX: Math.max(...xs), minY: Math.min(...ys), maxY: Math.max(...ys) };
+  }
+  return { minX: 0, maxX: 0, minY: 0, maxY: 0 };
+}
+
+function _movePiece(kind, ref, dx, dy) {
+  if (kind === 'freehand') {
+    const newPts = ref.pts.map(p => ({ x: p.x+dx, y: p.y+dy }));
+    ref.items.forEach(i => i.remove());
+    const { items, count, markCount, snappedPts } = renderPiece(newPts);
+    ref.pts = newPts; ref.items = items; ref.count = count;
+    ref.markCount = markCount; ref.snappedPts = snappedPts;
+  } else if (kind === 'rect') {
+    moveRectTo(ref, ref.x + dx, ref.y + dy);
+  } else if (kind === 'poly' || kind === 'trap') {
+    ref.pts = ref.pts.map(p => ({ x: p.x+dx, y: p.y+dy }));
+    if (ref.tpocketParams) {
+      ref.tpocketParams = { ...ref.tpocketParams };
+    }
+    rerenderPoly(ref);
+  }
+}
+
+function _alignAll(axis) {
+  if (_multiSel.length < 2) return;
+  const boxes  = _multiSel.map(s => ({ ...s, bbox: _getBbox(s.kind, s.ref) }));
+  let target;
+  if (axis === 'left')    target = Math.min(...boxes.map(b => b.bbox.minX));
+  if (axis === 'right')   target = Math.max(...boxes.map(b => b.bbox.maxX));
+  if (axis === 'top')     target = Math.min(...boxes.map(b => b.bbox.minY));
+  if (axis === 'bottom')  target = Math.max(...boxes.map(b => b.bbox.maxY));
+  if (axis === 'centerH') target = (Math.min(...boxes.map(b=>b.bbox.minX)) + Math.max(...boxes.map(b=>b.bbox.maxX))) / 2;
+  if (axis === 'centerV') target = (Math.min(...boxes.map(b=>b.bbox.minY)) + Math.max(...boxes.map(b=>b.bbox.maxY))) / 2;
+
+  boxes.forEach(({ kind, ref, bbox }) => {
+    let dx = 0, dy = 0;
+    if (axis === 'left')    dx = target - bbox.minX;
+    if (axis === 'right')   dx = target - bbox.maxX;
+    if (axis === 'top')     dy = target - bbox.minY;
+    if (axis === 'bottom')  dy = target - bbox.maxY;
+    if (axis === 'centerH') dx = target - (bbox.minX + bbox.maxX) / 2;
+    if (axis === 'centerV') dy = target - (bbox.minY + bbox.maxY) / 2;
+    if (dx !== 0 || dy !== 0) _movePiece(kind, ref, dx, dy);
+  });
+  deduplicateCorners();
+  updateStatus();
+}
+
+// Wire align buttons (wired after HTML loads; IDs match index.html)
+document.getElementById('btn-align-left')   ?.addEventListener('click', () => _alignAll('left'));
+document.getElementById('btn-align-right')  ?.addEventListener('click', () => _alignAll('right'));
+document.getElementById('btn-align-top')    ?.addEventListener('click', () => _alignAll('top'));
+document.getElementById('btn-align-bottom') ?.addEventListener('click', () => _alignAll('bottom'));
+document.getElementById('btn-align-ch')     ?.addEventListener('click', () => _alignAll('centerH'));
+document.getElementById('btn-align-cv')     ?.addEventListener('click', () => _alignAll('centerV'));
+
 // Wire Shapes tab Edit buttons
 document.getElementById('btn-copy')  ?.addEventListener('click', _copySelected);
 document.getElementById('btn-paste') ?.addEventListener('click', _pasteClipboard);
@@ -981,14 +1064,18 @@ document.getElementById('btn-flip-v')?.addEventListener('click', () => _flipSele
 
 // Enable/disable edit buttons based on selection
 function _syncEditBtns() {
-  const hasSel = !!getSelectedRect() || !!_selFreehand;
-  const hasCB  = !!_clipboard;
+  const hasSel   = !!getSelectedRect() || !!_selFreehand || _multiSel.length > 0;
+  const hasMulti = _multiSel.length >= 2;
+  const hasCB    = !!_clipboard;
   ['btn-copy', 'btn-flip-h', 'btn-flip-v'].forEach(id => {
-    const el = document.getElementById(id);
-    if (el) el.disabled = !hasSel;
+    const el = document.getElementById(id); if (el) el.disabled = !hasSel;
   });
   const pasteEl = document.getElementById('btn-paste');
   if (pasteEl) pasteEl.disabled = !hasCB;
+  ['btn-align-left','btn-align-right','btn-align-top',
+   'btn-align-bottom','btn-align-ch','btn-align-cv'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.disabled = !hasMulti;
+  });
 }
 _syncEditBtns();
 
@@ -1069,12 +1156,19 @@ freehandTool.onMouseDown = (event) => {
     stitchLayer.activate();
     activePath = new paper.Path({ strokeColor: '#2c7bb6', strokeWidth: 1, opacity: 0.5 });
   }
-  // Apply grid snap to placed vertex
-  const snapPt = (() => {
-    const snapped = _snapToGridMm(toMm(event.point.x), toMm(event.point.y));
-    return new paper.Point(px(snapped.x), px(snapped.y));
-  })();
-  activePath.add(snapPt);
+  // Apply grid snap and optional Shift angle-snap
+  let ptMm = _snapToGridMm(toMm(event.point.x), toMm(event.point.y));
+  if (event.modifiers?.shift && activePath.segments.length > 0) {
+    const last = activePath.lastSegment.point;
+    const lastMm = { x: toMm(last.x), y: toMm(last.y) };
+    const dx = ptMm.x - lastMm.x, dy = ptMm.y - lastMm.y;
+    const len = Math.sqrt(dx*dx + dy*dy);
+    if (len > 0.01) {
+      const snappedAngle = Math.round(Math.atan2(dy, dx) / (Math.PI/4)) * (Math.PI/4);
+      ptMm = { x: lastMm.x + len * Math.cos(snappedAngle), y: lastMm.y + len * Math.sin(snappedAngle) };
+    }
+  }
+  activePath.add(new paper.Point(px(ptMm.x), px(ptMm.y)));
 };
 
 freehandTool.onMouseDrag = (event) => {
