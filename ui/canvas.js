@@ -5,6 +5,8 @@ import { placeMarks, snapToStitches } from '../engine/stitch.js';
 import { initOffset, offsetPolyline } from '../engine/offset.js';
 import Clipper2Factory from '../vendor/clipper2z.js';
 import { initControls, getParams, onParamsChange } from './controls.js';
+import { initPolyTool, activatePolyMode, deactivatePolyMode,
+         redrawAllPolys, getPolyStats, getAllPolys } from './poly-tool.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
          copySelectedRect, pasteRect, flipSelectedRect,
@@ -49,8 +51,14 @@ const handleLayer = new paper.Layer(); // always on top — resize handles
 initRectTool(
   { cutLayer, stitchLayer, markLayer, handleLayer },
   () => { updateStatus(); updateSelInfo(); },
-  (rect) => { _zAdd('rect', rect); },           // called when a new rect is committed
-  (rect) => { _zRemove(rect); },                // called when a rect is deleted
+  (rect) => { _zAdd('rect', rect); },
+  (rect) => { _zRemove(rect); },
+);
+initPolyTool(
+  { cutLayer, stitchLayer, markLayer, handleLayer },
+  () => { updateStatus(); updateSelInfo(); },
+  (poly) => { _zAdd('poly', poly); },
+  (poly) => { _zRemove(poly); },
 );
 
 // ── Freehand pieces ───────────────────────────────────────────────────────────
@@ -151,6 +159,7 @@ function redrawAll() {
     piece.snappedPts = snappedPts;
   });
   redrawAllRects();
+  redrawAllPolys();
   deduplicateCorners();
   updateStatus();
   updateSelInfo();
@@ -164,13 +173,14 @@ function updateStatus() {
   const statusEl = document.getElementById('status');
   const pitchEl  = document.getElementById('status-pitch');
   const rs = getRectStats();
-  const totalPieces   = pieces.length + rs.count;
+  const ps = getPolyStats();
+  const totalPieces   = pieces.length + rs.count + ps.count;
 
   if (totalPieces === 0) {
     statusEl.textContent = '';
   } else {
-    const totalStitches = pieces.reduce((s, p) => s + p.count, 0)    + rs.stitches;
-    const totalMarks    = pieces.reduce((s, p) => s + p.markCount, 0) + rs.marks;
+    const totalStitches = pieces.reduce((s, p) => s + p.count, 0)    + rs.stitches + ps.stitches;
+    const totalMarks    = pieces.reduce((s, p) => s + p.markCount, 0) + rs.marks   + ps.marks;
     statusEl.textContent = (totalPieces === 1 && pieces.length === 1)
       ? `Line – ${pieces[0].count} stitches`
       : `${totalPieces} piece${totalPieces > 1 ? 's' : ''} · ${totalStitches} stitches`;
@@ -660,6 +670,7 @@ const hintEl = document.getElementById('hint');
 const HINTS = {
   freehand: 'Click to place points &nbsp;·&nbsp; Double-click to finish &nbsp;·&nbsp; Esc to cancel',
   rect:     'Drag to draw &nbsp;·&nbsp; Click edge to toggle stitch/open &nbsp;·&nbsp; Drag corner to resize &nbsp;·&nbsp; Delete to remove',
+  poly:     'Click to place vertices &nbsp;·&nbsp; Click start point or Enter to close &nbsp;·&nbsp; Click edge to cycle state &nbsp;·&nbsp; Drag vertex to reshape',
 };
 
 let _activeTool = 'freehand';
@@ -676,12 +687,15 @@ document.querySelectorAll('#tool-btns [data-tool]').forEach(btn => {
     const name = btn.dataset.tool;
     if (name === _activeTool) return;
     if (name === 'rect') {
-      clearGhost();
-      if (activePath) { activePath.remove(); activePath = null; }
-      _deselectFreehand();
+      clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
+      _deselectFreehand(); deactivatePolyMode();
       activateRectMode();
-    } else {
-      deactivateRectMode();
+    } else if (name === 'poly') {
+      clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
+      _deselectFreehand(); deactivateRectMode();
+      activatePolyMode();
+    } else { // freehand
+      deactivateRectMode(); deactivatePolyMode();
       freehandTool.activate();
     }
     setTool(name);
