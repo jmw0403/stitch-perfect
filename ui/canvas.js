@@ -1024,7 +1024,8 @@ function finalizePath(path) {
 // ── Select tool (default) ─────────────────────────────────────────────────────
 // Handles move/select for ALL object types. Drawing tools are for drawing only.
 
-let _selDrag = null; // { kind, ref, startPt, origData }
+let _selDrag    = null; // { kind, ref, startPt, origData }
+let _rubberBand = null; // { startPt, item: paper.Path }
 
 function _hitTestAll(point) {
   // Returns { kind, ref } for topmost hit, or null
@@ -1117,11 +1118,32 @@ selectTool.onMouseDown = (event) => {
     _msClear(); _deselectFreehand(); _clearMidGuides();
     _selDrag = null;
     _syncEditBtns();
+    // Start rubber-band selection on empty canvas
+    handleLayer.activate();
+    const rb = new paper.Path.Rectangle(event.point, new paper.Size(1, 1));
+    rb.strokeColor = '#2c7bb6'; rb.strokeWidth = 1;
+    rb.dashArray = [3, 3]; rb.fillColor = 'rgba(44,123,182,0.05)';
+    _rubberBand = { startPt: event.point, item: rb };
   }
 };
 
 selectTool.onMouseDrag = (event) => {
   if (handleTraceMouseDrag(event.point)) return;
+
+  // Rubber-band: update the selection rect
+  if (_rubberBand) {
+    _rubberBand.item.remove();
+    const p1 = _rubberBand.startPt, p2 = event.point;
+    const rect = new paper.Rectangle(p1, p2);
+    handleLayer.activate();
+    const rb = new paper.Path.Rectangle(rect);
+    rb.strokeColor = '#2c7bb6'; rb.strokeWidth = 1;
+    rb.dashArray = [3, 3]; rb.fillColor = 'rgba(44,123,182,0.05)';
+    _rubberBand.item = rb;
+    _rubberBand.endPt = p2;
+    return;
+  }
+
   if (!_selDrag) return;
   const dx = toMm(event.point.x - _selDrag.startPt.x);
   const dy = toMm(event.point.y - _selDrag.startPt.y);
@@ -1157,6 +1179,31 @@ selectTool.onMouseDrag = (event) => {
 
 selectTool.onMouseUp = () => {
   if (handleTraceMouseUp()) return;
+
+  // Commit rubber-band — select all pieces with bbox inside the band
+  if (_rubberBand) {
+    const rb = _rubberBand;
+    rb.item.remove();
+    if (rb.endPt) {
+      const p1mm = { x: toMm(Math.min(rb.startPt.x, rb.endPt.x)), y: toMm(Math.min(rb.startPt.y, rb.endPt.y)) };
+      const p2mm = { x: toMm(Math.max(rb.startPt.x, rb.endPt.x)), y: toMm(Math.max(rb.startPt.y, rb.endPt.y)) };
+      _msClear(); _deselectFreehand();
+      _zOrder.forEach(({ kind, ref }) => {
+        const bb = _pieceBBox({ kind, ref });
+        if (bb.minX >= p1mm.x && bb.maxX <= p2mm.x &&
+            bb.minY >= p1mm.y && bb.maxY <= p2mm.y) {
+          _msAdd(kind, ref);
+          if (kind === 'freehand') _selectFreehand(ref);
+        }
+      });
+      // Force a final sync after all pieces are added
+      setTimeout(() => _syncEditBtns(), 0);
+      updateSelInfo(); updateStatus();
+    }
+    _rubberBand = null;
+    return;
+  }
+
   if (_selDrag) { _selDrag = null; deduplicateCorners(); updateStatus(); }
 };
 
@@ -1384,84 +1431,67 @@ function _alignAll(axis) {
   updateStatus();
 }
 
-// ── Boolean Fuse (Union of two shapes) ───────────────────────────────────────
-// Combines two selected closed shapes using Clipper2 Union, then creates a new
-// poly from the result with all edges defaulting to 'stitched'.
+// ── Boolean shape operations (Union / Difference) ────────────────────────────
 
-async function _fuseSelected() {
-  // Need exactly 2 closed shapes (rects or polys)
-  const sel = _multiSel.filter(s => s.kind === 'rect' || s.kind === 'poly');
+function _shapeToPolygon(kind, ref) {
+  if (kind === 'rect') {
+    const { x, y, w, h } = ref;
+    return [{ x, y }, { x: x+w, y }, { x: x+w, y: y+h }, { x, y: y+h }];
+  }
+  if (kind === 'poly')    return ref.pts;
+  if (kind === 'oval') {
+    const { cx, cy, rx, ry } = ref;
+    return Array.from({ length: 64 }, (_, i) => {
+      const t = 2 * Math.PI * i / 64;
+      return { x: cx + rx * Math.cos(t), y: cy + ry * Math.sin(t) };
+    });
+  }
+  if (kind === 'bezier')  return ref.segs.map(s => s.pt);
+  return [];
+}
+
+function _clipperOp(op) {
+  const sel = _multiSel.filter(s => ['rect','poly','oval','bezier'].includes(s.kind));
   if (sel.length !== 2) return;
+  const C = getClipperModule();
+  if (!C) return;
 
-  const C = await getClipperModule();
-  if (!C) { console.warn('Clipper2 not ready'); return; }
+  const pts1 = _shapeToPolygon(sel[0].kind, sel[0].ref);
+  const pts2 = _shapeToPolygon(sel[1].kind, sel[1].ref);
+  if (pts1.length < 3 || pts2.length < 3) return;
 
-  function toPtsD(kind, ref) {
-    if (kind === 'rect') {
-      const { x, y, w, h } = ref;
-      return [{ x, y }, { x: x+w, y }, { x: x+w, y: y+h }, { x, y: y+h }];
-    }
-    return ref.pts;
-  }
-
-  const flat1 = toPtsD(sel[0].kind, sel[0].ref);
-  const flat2 = toPtsD(sel[1].kind, sel[1].ref);
-
-  // Build Clipper2 PathsD
-  function mkPaths(pts) {
-    const path = C.MakePathD(pts.flatMap(p => [p.x, p.y]));
-    const paths = new C.PathsD();
-    paths.push_back(path);
-    path.delete();
-    return paths;
-  }
-
-  const subj = mkPaths(flat1);
-  const clip  = mkPaths(flat2);
-  const result = C.UnionD(subj, clip, C.FillRule.NonZero, 4);
-
+  const mkP = pts => {
+    const p = C.MakePathD(pts.flatMap(q => [q.x, q.y]));
+    const ps = new C.PathsD(); ps.push_back(p); p.delete(); return ps;
+  };
+  const subj = mkP(pts1), clip = mkP(pts2);
+  const result = op === 'union'
+    ? C.UnionD(subj, clip, C.FillRule.NonZero, 4)
+    : C.DifferenceD(subj, clip, C.FillRule.NonZero, 4);
   subj.delete(); clip.delete();
 
-  if (result.size() === 0) { result.delete(); return; }
+  if (!result || result.size() === 0) { result?.delete(); return; }
 
-  // Extract the first (outer) ring from the result
   const ring = result.get(0);
-  const newPts = [];
-  for (let i = 0; i < ring.size(); i++) {
-    const pt = ring.get(i);
-    newPts.push({ x: pt.x, y: pt.y });
-  }
+  const raw = [];
+  for (let i = 0; i < ring.size(); i++) { const p = ring.get(i); raw.push({ x: p.x, y: p.y }); }
   result.delete();
+  if (raw.length < 3) return;
 
-  if (newPts.length < 3) return;
-
-  // Remove internal duplicates
-  const clean = [newPts[0]];
-  for (let i = 1; i < newPts.length; i++) {
-    const p = newPts[i], q = clean[clean.length-1];
+  const clean = [raw[0]];
+  for (let i = 1; i < raw.length; i++) {
+    const p = raw[i], q = clean[clean.length-1];
     if (Math.abs(p.x-q.x) > 0.01 || Math.abs(p.y-q.y) > 0.01) clean.push(p);
   }
 
-  // Create new poly — all edges stitched by default, user can toggle
-  const poly = {
-    pts:   clean,
-    edges: clean.map(() => 'stitched'),
-    items: [],
-  };
-
-  // Delete original two pieces
   _msDeleteAll();
-
-  // Add fused poly
-  getAllPolys().push(poly);
-  _zAdd('poly', poly);
-  selectPoly(poly);
-  rerenderPoly(poly);
-  updateStatus();
-  updateSelInfo();
+  const poly = { pts: clean, edges: clean.map(() => 'stitched'), items: [] };
+  getAllPolys().push(poly); _zAdd('poly', poly);
+  selectPoly(poly); rerenderPoly(poly);
+  updateStatus(); updateSelInfo();
 }
 
-document.getElementById('btn-fuse')?.addEventListener('click', () => { _fuseSelected(); });
+document.getElementById('btn-fuse')?.addEventListener('click', () => _clipperOp('union'));
 
 // Wire align buttons (wired after HTML loads; IDs match index.html)
 document.getElementById('btn-align-left')   ?.addEventListener('click', () => _alignAll('left'));
@@ -1491,7 +1521,7 @@ function _syncEditBtns() {
    'btn-align-bottom','btn-align-ch','btn-align-cv'].forEach(id => {
     const el = document.getElementById(id); if (el) el.disabled = !hasMulti;
   });
-  const fuseable = _multiSel.filter(s => s.kind === 'rect' || s.kind === 'poly').length === 2;
+  const fuseable = _multiSel.filter(s => ['rect','poly','oval','bezier'].includes(s.kind)).length === 2;
   const fuseEl = document.getElementById('btn-fuse');
   if (fuseEl) fuseEl.disabled = !fuseable;
 }
