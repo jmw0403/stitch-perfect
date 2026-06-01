@@ -8,6 +8,7 @@ import { initControls, getParams, onParamsChange } from './controls.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
          copySelectedRect, pasteRect, flipSelectedRect,
+         getAllRects, moveRectTo, deleteRect as _deleteRectItem,
          getRectSnapPoints } from './rect-tool.js';
 import { px, toMm, createMark } from './render.js';
 
@@ -368,6 +369,156 @@ function _showFhSnapAt(mmPt) {
   _fhSnapIndicator.fillColor   = null;
 }
 
+// ── Multi-select + Group ──────────────────────────────────────────────────────
+//
+// _multiSel  : Array<{kind:'freehand'|'rect', ref, origX, origY}>
+//              origX/Y store the position at drag-start for group move.
+// _groups    : Array<{id, members:Array<{kind,ref}>}>
+//              Groups are resolved at interaction time (pieces inside move together).
+
+let _multiSel   = [];
+let _groups     = [];
+let _selBoxItem = null; // paper item showing the multi-selection bounding box
+
+function _msIn(ref) { return _multiSel.some(s => s.ref === ref); }
+
+function _msAdd(kind, ref) {
+  if (!_msIn(ref)) _multiSel.push({ kind, ref });
+  _drawSelBox();
+  _syncEditBtns();
+}
+
+function _msRemove(ref) {
+  _multiSel = _multiSel.filter(s => s.ref !== ref);
+  _drawSelBox();
+  _syncEditBtns();
+}
+
+function _msClear() {
+  _multiSel = [];
+  if (_selBoxItem) { _selBoxItem.remove(); _selBoxItem = null; }
+  _syncEditBtns();
+}
+
+// Bounding box for a piece {kind, ref}
+function _pieceBBox({ kind, ref }) {
+  if (kind === 'freehand') {
+    const pts = ref.pts;
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    pts.forEach(p => { minX=Math.min(minX,p.x); minY=Math.min(minY,p.y);
+                       maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); });
+    return { x: minX, y: minY, w: maxX-minX, h: maxY-minY };
+  }
+  const { margin } = getParams();
+  return { x: ref.x - margin, y: ref.y - margin,
+           w: ref.w + 2*margin, h: ref.h + 2*margin };
+}
+
+function _drawSelBox() {
+  if (_selBoxItem) { _selBoxItem.remove(); _selBoxItem = null; }
+  if (_multiSel.length < 2) return;
+
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  _multiSel.forEach(s => {
+    const b = _pieceBBox(s);
+    minX = Math.min(minX, b.x); minY = Math.min(minY, b.y);
+    maxX = Math.max(maxX, b.x + b.w); maxY = Math.max(maxY, b.y + b.h);
+  });
+
+  handleLayer.activate();
+  _selBoxItem = new paper.Path.Rectangle(
+    new paper.Point(px(minX) - 6, px(minY) - 6),
+    new paper.Size(px(maxX - minX) + 12, px(maxY - minY) + 12),
+  );
+  _selBoxItem.strokeColor = '#5bb3f5';
+  _selBoxItem.strokeWidth = 1;
+  _selBoxItem.dashArray   = [4, 3];
+  _selBoxItem.fillColor   = null;
+}
+
+// Group helpers
+function _groupOf(ref) { return _groups.find(g => g.members.some(m => m.ref === ref)); }
+
+function _selectGroup(group) {
+  _msClear();
+  group.members.forEach(m => _msAdd(m.kind, m.ref));
+}
+
+// Delete all multi-selected pieces
+function _msDeleteAll() {
+  if (_multiSel.length === 0) return;
+  const toDelete = [..._multiSel];
+  _msClear();
+  _deselectFreehand();
+
+  toDelete.forEach(({ kind, ref }) => {
+    if (kind === 'freehand') {
+      ref.items.forEach(i => i.remove());
+      pieces.splice(pieces.indexOf(ref), 1);
+    } else {
+      _deleteRectItem(ref);
+    }
+    // Remove any group containing this piece
+    _groups = _groups.filter(g => !g.members.some(m => m.ref === ref));
+  });
+
+  deduplicateCorners();
+  updateStatus();
+  updateSelInfo();
+}
+
+// Move all multi-selected pieces by dx,dy (mm), called during group drag
+function _msMoveAll(dx, dy) {
+  _multiSel.forEach(({ kind, ref, origX, origY }) => {
+    if (kind === 'freehand') {
+      const newPts = ref.pts.map(p => ({ x: p.x + dx, y: p.y + dy }));
+      ref.items.forEach(i => i.remove());
+      const { items, count, markCount, snappedPts } = renderPiece(newPts);
+      if (_selFreehand === ref) { items[0].strokeColor = '#5bb3f5'; items[0].strokeWidth = 1.5; }
+      ref.pts = newPts; ref.items = items; ref.count = count;
+      ref.markCount = markCount; ref.snappedPts = snappedPts;
+    } else {
+      moveRectTo(ref, origX + dx, origY + dy);
+    }
+  });
+  _drawSelBox();
+}
+
+// Ctrl+G — group current multi-selection
+function _groupSelected() {
+  if (_multiSel.length < 2) return;
+  const id = Date.now();
+  const members = _multiSel.map(({ kind, ref }) => ({ kind, ref }));
+  // Remove any existing groups whose members overlap
+  _groups = _groups.filter(g => !g.members.some(m => members.some(n => n.ref === m.ref)));
+  _groups.push({ id, members });
+  updateStatus();
+}
+
+// Ctrl+Shift+G — ungroup
+function _ungroupSelected() {
+  const refs = new Set(_multiSel.map(s => s.ref));
+  _groups = _groups.filter(g => !g.members.some(m => refs.has(m.ref)));
+  updateStatus();
+}
+
+// Keyboard shortcuts for group
+document.addEventListener('keydown', ev => {
+  if ((ev.ctrlKey || ev.metaKey) && !ev.shiftKey && ev.key === 'g') {
+    _groupSelected(); ev.preventDefault();
+  }
+  if ((ev.ctrlKey || ev.metaKey) && ev.shiftKey && ev.key === 'G') {
+    _ungroupSelected(); ev.preventDefault();
+  }
+  if (ev.key === 'Delete' || ev.key === 'Backspace') {
+    if (_multiSel.length > 1) { _msDeleteAll(); ev.preventDefault(); }
+  }
+});
+
+// Wire Shapes tab Group buttons
+document.getElementById('btn-group')  ?.addEventListener('click', _groupSelected);
+document.getElementById('btn-ungroup')?.addEventListener('click', _ungroupSelected);
+
 // ── Freehand selection + move ────────────────────────────────────────────────
 
 let _selFreehand       = null; // selected freehand piece
@@ -548,14 +699,35 @@ freehandTool.onMouseDown = (event) => {
   if (!activePath) {
     const hit = _findFreehandAt(event.point);
     if (hit) {
-      if (_selFreehand !== hit) _selectFreehand(hit);
-      // Prime drag state — actual drag only fires if mouse moves
+      // Check if it belongs to a group — select the whole group
+      const grp = _groupOf(hit);
+      if (event.modifiers?.shift) {
+        // Shift+click: toggle piece in multi-select
+        if (_msIn(hit)) _msRemove(hit);
+        else { _msAdd('freehand', hit); _selectFreehand(hit); }
+        return;
+      }
+      if (grp) {
+        _msClear(); _selectGroup(grp);
+      } else {
+        if (_selFreehand !== hit) { _msClear(); _selectFreehand(hit); }
+      }
+      // Snapshot original positions for group move
+      _multiSel.forEach(s => {
+        if (s.kind === 'freehand') {
+          s.origX = s.ref.pts[0].x; s.origY = s.ref.pts[0].y;
+          s.ref._origPts = s.ref.pts.map(p => ({...p})); // full pts snapshot
+        } else {
+          s.origX = s.ref.x; s.origY = s.ref.y;
+        }
+      });
       _fhDragPiece   = hit;
       _fhDragStart   = event.point;
       _fhDragOrigPts = hit.pts.map(p => ({ x: p.x, y: p.y }));
-      return; // don't add a new point
+      return;
     }
     _deselectFreehand();
+    _msClear();
     _fhDragPiece = null;
   }
 
@@ -603,8 +775,31 @@ freehandTool.onMouseDrag = (event) => {
   }
 
   const newPts = _fhDragOrigPts.map(p => ({ x: p.x + dx, y: p.y + dy }));
+
+  // Move all group/multi-sel members together (excluding the dragged piece itself)
+  if (_multiSel.length > 1 && _msIn(_fhDragPiece)) {
+    const baseDx = newPts[0].x - _fhDragOrigPts[0].x;
+    const baseDy = newPts[0].y - _fhDragOrigPts[0].y;
+    _multiSel.forEach(({ kind, ref, origX, origY }) => {
+      if (ref === _fhDragPiece) return;
+      if (kind === 'rect')      moveRectTo(ref, origX + baseDx, origY + baseDy);
+      if (kind === 'freehand') {
+        const movedPts = ref.pts.map((p, i) => ({
+          x: (ref._origPts?.[i]?.x ?? p.x) + baseDx,
+          y: (ref._origPts?.[i]?.y ?? p.y) + baseDy,
+        }));
+        ref.items.forEach(i => i.remove());
+        const { items, count, markCount, snappedPts } = renderPiece(movedPts);
+        if (_selFreehand === ref) { items[0].strokeColor = '#5bb3f5'; items[0].strokeWidth = 1.5; }
+        ref.pts = movedPts; ref.items = items;
+        ref.count = count; ref.markCount = markCount; ref.snappedPts = snappedPts;
+      }
+    });
+    _drawSelBox();
+  }
+
   _fhDragPiece.items.forEach(item => item.remove());
-  const { items, count, markCount } = renderPiece(newPts);
+  const { items, count, markCount, snappedPts } = renderPiece(newPts);
   if (_selFreehand === _fhDragPiece) {
     items[0].strokeColor = '#5bb3f5';
     items[0].strokeWidth = 1.5;
@@ -612,6 +807,7 @@ freehandTool.onMouseDrag = (event) => {
   _fhDragPiece.items    = items;
   _fhDragPiece.count    = count;
   _fhDragPiece.markCount = markCount;
+  _fhDragPiece.snappedPts = snappedPts;
   _fhDragPiece.pts      = newPts;
   updateSelInfo();
 };

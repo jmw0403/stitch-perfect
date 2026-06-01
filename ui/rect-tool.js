@@ -132,6 +132,27 @@ export function toggleSelectedEdge(side) {
   _toggleEdge(_selected, side);
 }
 
+// Returns the live _rects array — for multi-select / group coordination.
+export function getAllRects() { return _rects; }
+
+// Move a specific rect to an absolute position (used by group move).
+export function moveRectTo(rect, x, y) {
+  rect.x = x;
+  rect.y = y;
+  rect.items.forEach(i => i.remove());
+  rect.items = _renderRect(rect);
+  if (_selected === rect) _showHandles(rect);
+}
+
+// Delete a specific rect (used by multi-delete and group-delete).
+export function deleteRect(rect) {
+  if (_selected === rect) { _clearHandles(); _selected = null; }
+  rect.items.forEach(i => i.remove());
+  const idx = _rects.indexOf(rect);
+  if (idx !== -1) _rects.splice(idx, 1);
+  _onChange();
+}
+
 // Returns a deep copy of the selected rect's data for clipboard use.
 export function copySelectedRect() {
   if (!_selected) return null;
