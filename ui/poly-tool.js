@@ -5,6 +5,7 @@ import { placeMarks, snapToStitches } from '../engine/stitch.js';
 import { offsetPolyline } from '../engine/offset.js';
 import { getParams } from './controls.js';
 import { px, toMm, createMark } from './render.js';
+import { tpocketVertices, translatePts, clampParams } from './tpocket.js';
 
 const HANDLE_PX      = 8;
 const EDGE_HIT_PX    = 10;
@@ -343,6 +344,7 @@ function _renderPoly(poly) {
 // ── Vertex handles ─────────────────────────────────────────────────────────────
 
 function _showVertexHandles(poly) {
+  if (poly.tpocketParams) { _showTPocketHandles(poly); return; }
   _clearHandles();
   _layers.handleLayer.activate();
   poly.pts.forEach((p, i) => {
@@ -357,6 +359,43 @@ function _showVertexHandles(poly) {
     sq.data = { vertexIdx: i };
     _handles.push(sq);
   });
+}
+
+// ── T-Pocket named handles ────────────────────────────────────────────────────
+// 5 constrained handles — each controls exactly one parameter.
+// Ear corners always stay 90°; left and right are always symmetric.
+
+function _showTPocketHandles(poly) {
+  _clearHandles();
+  const p  = poly.tpocketParams;
+  const ox = poly.pts[0].x, oy = poly.pts[0].y;
+
+  // [ param, x_mm, y_mm, drag-axis, color ]
+  const defs = [
+    { param: 'tw', x: ox,                       y: oy + p.th / 2,  dir: 'h', label: 'T width'  },
+    { param: 'th', x: ox + p.tw / 2,            y: oy,             dir: 'v', label: 'T height' },
+    { param: 'tt', x: ox + p.tt,                y: oy + p.th,      dir: 'h', label: 'T tab'   },
+    { param: 'bw', x: ox + (p.tw - p.bw) / 2,  y: oy + p.h,       dir: 'h', label: 'Base W'  },
+    { param: 'h',  x: ox + p.tw / 2,            y: oy + p.h,       dir: 'v', label: 'Height'  },
+  ];
+
+  _layers.handleLayer.activate();
+  defs.forEach((def, i) => {
+    const h = HANDLE_PX / 2;
+    const sq = new paper.Path.Rectangle(
+      new paper.Point(px(def.x) - h, px(def.y) - h),
+      new paper.Size(HANDLE_PX, HANDLE_PX),
+    );
+    sq.fillColor   = '#f39c12';   // orange — distinguishes T-pocket handles
+    sq.strokeColor = '#e67e22';
+    sq.strokeWidth = 1;
+    sq.data = { vertexIdx: i, tpParam: def.param, tpDir: def.dir };
+    _handles.push(sq);
+  });
+}
+
+function _isTPocketHandle(handle) {
+  return !!handle?.data?.tpParam;
 }
 
 function _clearHandles() {
@@ -511,16 +550,45 @@ function _cancelDraw() {
 
 function _startVertexDrag(idx, point) {
   _dragVertex = {
-    poly:      _selected,
+    poly:         _selected,
     idx,
-    origPts:   _selected.pts.map(p => ({...p})),
-    startPoint: point,
+    origPts:      _selected.pts.map(p => ({...p})),
+    startPoint:   point,
+    origTPParams: _selected.tpocketParams ? { ..._selected.tpocketParams } : null,
   };
 }
 
 function _updateVertexDrag(point) {
   if (!_dragVertex) return;
-  const { poly, idx, origPts, startPoint } = _dragVertex;
+  const { poly, idx, origPts, startPoint, origTPParams } = _dragVertex;
+  const handle = _handles[idx];
+
+  // ── T-pocket constrained drag ─────────────────────────────────────────────
+  if (origTPParams && _isTPocketHandle(handle)) {
+    const { tpParam: param, tpDir: dir } = handle.data;
+    const rawDx = toMm(point.x - startPoint.x);
+    const rawDy = toMm(point.y - startPoint.y);
+    const dx = (dir === 'h') ? rawDx : 0;
+    const dy = (dir === 'v') ? rawDy : 0;
+
+    let np = { ...origTPParams };
+    if      (param === 'tw') np.tw = Math.max(20, origTPParams.tw - 2 * dx); // left edge → symmetric
+    else if (param === 'th') np.th = Math.max(5,  origTPParams.th + dy);     // top center → ear height
+    else if (param === 'tt') np.tt = Math.max(5,  origTPParams.tt + dx);     // inner shoulder → mirrors
+    else if (param === 'bw') np.bw = Math.max(10, origTPParams.bw - 2 * dx); // base corner → symmetric
+    else if (param === 'h')  np.h  = Math.max(20, origTPParams.h  + dy);     // bottom center → height
+
+    const clamped = clampParams(np);
+    poly.tpocketParams = clamped;
+    poly.pts = translatePts(tpocketVertices(clamped), poly.pts[0].x, poly.pts[0].y);
+    poly.items.forEach(i => i.remove());
+    poly.items = _renderPoly(poly);
+    _showTPocketHandles(poly);
+    _onChange();
+    return;
+  }
+
+  // ── Generic polygon vertex drag ────────────────────────────────────────────
   const newPts = origPts.map((p, i) => i === idx
     ? { x: toMm(point.x), y: toMm(point.y) }
     : p);
