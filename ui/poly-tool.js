@@ -210,7 +210,17 @@ export function getPolyStats() {
   return { count: _polys.length, stitches, marks };
 }
 
-export function getAllPolys() { return _polys; }
+export function getAllPolys()      { return _polys; }
+export function getSelectedPoly() { return _selected; }
+export function selectPoly(poly)  { _selectPoly(poly); }
+
+// Re-render a poly whose pts or edges have been updated externally (e.g. T-pocket param change).
+export function rerenderPoly(poly) {
+  poly.items.forEach(i => i.remove());
+  poly.items = _renderPoly(poly);
+  if (_selected === poly) _showVertexHandles(poly);
+  _onChange();
+}
 
 // ── Edge / vertex geometry ────────────────────────────────────────────────────
 

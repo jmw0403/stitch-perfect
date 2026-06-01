@@ -6,7 +6,10 @@ import { initOffset, offsetPolyline } from '../engine/offset.js';
 import Clipper2Factory from '../vendor/clipper2z.js';
 import { initControls, getParams, onParamsChange } from './controls.js';
 import { initPolyTool, activatePolyMode, activateTrapMode, deactivatePolyMode,
-         redrawAllPolys, getPolyStats, getAllPolys } from './poly-tool.js';
+         redrawAllPolys, getPolyStats, getAllPolys,
+         getSelectedPoly, rerenderPoly, selectPoly } from './poly-tool.js';
+import { tpocketVertices, tpocketEdges, translatePts,
+         clampParams, DEFAULT_PARAMS } from './tpocket.js';
 import { initOvalTool, activateOvalMode, deactivateOvalMode,
          redrawAllOvals, getOvalStats, getAllOvals } from './oval-tool.js';
 import { downloadSVG } from './export.js';
@@ -400,6 +403,81 @@ function updateSelInfo() {
     });
     return;
   }
+
+  // ── Polygon (T-pocket or generic) selected ────────────────────────────────
+  const selPoly = getSelectedPoly();
+  if (selPoly) {
+    if (selPoly.tpocketParams) {
+      // ── T-Pocket template ──────────────────────────────────────────────────
+      const p = selPoly.tpocketParams;
+      const fieldHtml = (label, key, val, min = 5) =>
+        `<div class="piece-field">
+           <div class="piece-field-label">${label}</div>
+           <div style="display:flex;align-items:center;gap:3px">
+             <input class="tp-input" data-param="${key}" type="number"
+                    value="${val}" min="${min}" step="1"
+                    style="width:52px;background:#252525;color:#ddd;border:1px solid #333;
+                           border-radius:4px;padding:2px 5px;font-size:13px;font-weight:600">
+             <span style="font-size:10px;color:#555">mm</span>
+           </div>
+         </div>`;
+      el.innerHTML = `
+        <div class="piece-section">
+          <div class="piece-section-label" style="color:#f39c12">T-Pocket Template</div>
+          <div style="font-size:10px;color:#555;margin-bottom:4px">
+            Angled sides auto-adjust
+          </div>
+          <div class="piece-grid" style="gap:10px 8px">
+            ${fieldHtml('Total height', 'h',  p.h,  20)}
+            ${fieldHtml('T width',      'tw', p.tw, 20)}
+            ${fieldHtml('T height (ear)', 'th', p.th, 5)}
+            ${fieldHtml('T tab length', 'tt', p.tt, 5)}
+            ${fieldHtml('Base width',   'bw', p.bw, 10)}
+          </div>
+        </div>
+        <div class="piece-section">
+          <div class="piece-section-label">Position</div>
+          <div class="piece-grid">
+            <div class="piece-field"><div class="piece-field-label">X</div>
+              <div class="piece-field-val secondary">${selPoly.pts[0].x.toFixed(1)} mm</div></div>
+            <div class="piece-field"><div class="piece-field-label">Y</div>
+              <div class="piece-field-val secondary">${selPoly.pts[0].y.toFixed(1)} mm</div></div>
+          </div>
+        </div>`;
+
+      // Wire param inputs
+      el.querySelectorAll('.tp-input').forEach(input => {
+        input.addEventListener('change', () => {
+          const v = parseFloat(input.value);
+          if (!isNaN(v) && v > 0) _updateTPocketParams(selPoly, input.dataset.param, v);
+        });
+      });
+    } else {
+      // ── Generic polygon ────────────────────────────────────────────────────
+      const xs = selPoly.pts.map(p => p.x), ys = selPoly.pts.map(p => p.y);
+      const bw = (Math.max(...xs) - Math.min(...xs)).toFixed(1);
+      const bh = (Math.max(...ys) - Math.min(...ys)).toFixed(1);
+      el.innerHTML = `
+        <div class="piece-section">
+          <div class="piece-section-label">Polygon</div>
+          <div class="piece-grid">
+            <div class="piece-field"><div class="piece-field-label">Vertices</div>
+              <div class="piece-field-val">${selPoly.pts.length}</div></div>
+            <div class="piece-field"><div class="piece-field-label">Bbox</div>
+              <div class="piece-field-val secondary">${bw} × ${bh} mm</div></div>
+          </div>
+          <div style="font-size:10px;color:#555;margin-top:4px">
+            Click edges on canvas to cycle state
+          </div>
+        </div>`;
+    }
+    return;
+  }
+
+  // ── Oval selected ─────────────────────────────────────────────────────────
+  // (Handled by oval-tool's own selection; getSelectedOval in canvas updateSelInfo)
+  // Oval selection info is shown via the _onChange callback updating the piece tab.
+  // For now show a simple summary when an oval is the last-known selection.
 
   // ── Freehand selected ──────────────────────────────────────────────────────
   if (_selFreehand) {
@@ -847,6 +925,48 @@ function _flipSelected(axis) {
     updateStatus(); updateSelInfo();
   }
 }
+
+// ── T-Pocket template ─────────────────────────────────────────────────────────
+
+function _createTPocket(params = DEFAULT_PARAMS) {
+  const clamped = clampParams(params);
+  // Center on visible canvas area
+  const { margin } = getParams();
+  const canvasW = toMm(canvasEl.width / (window.devicePixelRatio || 1));
+  const canvasH = toMm(canvasEl.height / (window.devicePixelRatio || 1));
+  const ox = Math.max(margin + 5, (canvasW - clamped.tw) / 2);
+  const oy = Math.max(margin + 5, (canvasH - clamped.h)  / 2);
+  const pts  = translatePts(tpocketVertices(clamped), ox, oy);
+  const poly = { pts, edges: tpocketEdges(), tpocketParams: { ...clamped }, items: [] };
+  return poly;
+}
+
+function _updateTPocketParams(poly, key, value) {
+  const params = clampParams({ ...poly.tpocketParams, [key]: value });
+  poly.tpocketParams = params;
+  // Preserve translation — use first vertex (outer top-left) as anchor
+  const ox = poly.pts[0].x, oy = poly.pts[0].y;
+  poly.pts = translatePts(tpocketVertices(params), ox, oy);
+  rerenderPoly(poly);
+  updateSelInfo();
+}
+
+// Wire T-Pocket button in Shapes tab Templates section
+document.getElementById('btn-tpocket')?.addEventListener('click', () => {
+  deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode();
+  // Switch to poly mode so the T-pocket can be selected/moved via poly-tool
+  activatePolyMode();
+  setTool('poly');
+  // Inject T-pocket into poly-tool's _polys array via poly creation API
+  const poly = _createTPocket();
+  // Use poly-tool's internal commit path by dispatching to poly-tool
+  // We call rerenderPoly which requires poly to already be in _polys.
+  // To avoid tight coupling we use poly-tool's getAllPolys() reference:
+  getAllPolys().push(poly);
+  _zAdd('poly', poly);
+  selectPoly(poly);   // sets _selected → getSelectedPoly() works in Piece tab
+  rerenderPoly(poly); // renders items + handles, triggers _onChange → status/selInfo
+});
 
 // Wire View tab Export buttons
 document.getElementById('btn-export-svg')?.addEventListener('click', () => {
