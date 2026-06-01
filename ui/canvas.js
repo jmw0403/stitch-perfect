@@ -13,7 +13,9 @@ import { tpocketVertices, tpocketEdges, translatePts,
 import { initOvalTool, activateOvalMode, deactivateOvalMode,
          redrawAllOvals, getOvalStats, getAllOvals } from './oval-tool.js';
 import { initBezierTool, initBezierToolLayers, activateBezierMode, deactivateBezierMode,
-         redrawAllBeziers, getBezierStats, getAllBeziers } from './bezier-tool.js';
+         redrawAllBeziers, getBezierStats, getAllBeziers, rerenderBezier, moveBezierBy } from './bezier-tool.js';
+import { rerenderOval, moveOvalBy } from './oval-tool.js';
+import { movePolyBy } from './poly-tool.js';
 import { downloadSVG } from './export.js';
 import { initRectTool, activateRectMode, deactivateRectMode,
          redrawAllRects, getRectStats, getSelectedRect, toggleSelectedEdge,
@@ -925,10 +927,152 @@ function finalizePath(path) {
   updateStatus();
 }
 
+// ── Select tool (default) ─────────────────────────────────────────────────────
+// Handles move/select for ALL object types. Drawing tools are for drawing only.
+
+let _selDrag = null; // { kind, ref, startPt, origData }
+
+function _hitTestAll(point) {
+  // Returns { kind, ref } for topmost hit, or null
+  // Check in z-order (last drawn = topmost): iterate _zOrder in reverse
+  for (let i = _zOrder.length - 1; i >= 0; i--) {
+    const { kind, ref } = _zOrder[i];
+    if (kind === 'freehand') {
+      const hit = ref.items[0]?.hitTest(point, { stroke: true, tolerance: 8 });
+      if (hit) return { kind, ref };
+    } else if (kind === 'rect') {
+      const { x, y, w, h } = ref;
+      if (point.x >= px(x)-8 && point.x <= px(x+w)+8 &&
+          point.y >= px(y)-8 && point.y <= px(y+h)+8) return { kind, ref };
+    } else if (kind === 'poly') {
+      // Hit any item in the poly (stitch path or marks)
+      for (const item of ref.items) {
+        if (item.hitTest?.(point, { stroke: true, fill: true, tolerance: 8 })) return { kind, ref };
+      }
+    } else if (kind === 'oval') {
+      const { cx, cy, rx, ry } = ref;
+      const dx = toMm(point.x)-cx, dy = toMm(point.y)-cy;
+      if (Math.abs(Math.sqrt((dx/rx)**2+(dy/ry)**2) - 1) < 0.25) return { kind, ref };
+    } else if (kind === 'bezier') {
+      const hit = ref.items[1]?.hitTest?.(point, { stroke: true, tolerance: 8 });
+      if (hit) return { kind, ref };
+    }
+  }
+  return null;
+}
+
+function _selectAny({ kind, ref }) {
+  // Deselect current
+  _deselectFreehand();
+  // Select by type
+  if (kind === 'freehand') { _selectFreehand(ref); }
+  else if (kind === 'rect')   { /* rect-tool handles its own selection visually */ }
+  else if (kind === 'poly')   { selectPoly(ref); }
+  // oval and bezier have their own _select internals; use multiSel for now
+  _msAdd(kind, ref);
+}
+
+function _moveSelected(kind, ref, dx, dy) {
+  if (kind === 'freehand') {
+    const newPts = ref.pts.map(p => ({ x: p.x+dx, y: p.y+dy }));
+    ref.items.forEach(i => i.remove());
+    const { items, count, markCount, snappedPts } = renderPiece(newPts);
+    if (_selFreehand === ref) { items[0].strokeColor='#5bb3f5'; items[0].strokeWidth=1.5; }
+    ref.pts=newPts; ref.items=items; ref.count=count; ref.markCount=markCount; ref.snappedPts=snappedPts;
+  } else if (kind === 'rect') {
+    moveRectTo(ref, ref.x+dx, ref.y+dy);
+  } else if (kind === 'poly') {
+    movePolyBy(ref, dx, dy);
+  } else if (kind === 'oval') {
+    moveOvalBy(ref, dx, dy);
+  } else if (kind === 'bezier') {
+    moveBezierBy(ref, dx, dy);
+  }
+}
+
+const selectTool = new paper.Tool();
+
+selectTool.onMouseDown = (event) => {
+  if (event.modifiers?.alt) { _zAltClick(event.point); return; }
+  if (handleTraceMouseDown(event.point)) return;
+
+  const hit = _hitTestAll(event.point);
+  if (hit) {
+    if (!event.modifiers?.shift) {
+      // Single select — clear previous, select this
+      _msClear(); _deselectFreehand();
+    }
+    if (hit.kind === 'freehand' && !_msIn(hit.ref)) _selectFreehand(hit.ref);
+    _msAdd(hit.kind, hit.ref);
+
+    // Snapshot positions for drag
+    const origData = {};
+    _multiSel.forEach(s => {
+      if (s.kind === 'freehand') origData[_zIndexOf(s.ref)] = s.ref.pts.map(p=>({...p}));
+      else if (s.kind === 'rect') origData[_zIndexOf(s.ref)] = { x: s.ref.x, y: s.ref.y };
+      else if (s.kind === 'poly')  origData[_zIndexOf(s.ref)] = s.ref.pts.map(p=>({...p}));
+      else if (s.kind === 'oval')  origData[_zIndexOf(s.ref)] = { cx: s.ref.cx, cy: s.ref.cy };
+      else if (s.kind === 'bezier') origData[_zIndexOf(s.ref)] = s.ref.segs.map(sg=>({...sg,pt:{...sg.pt}}));
+    });
+    _selDrag = { startPt: event.point, origData };
+    _syncEditBtns();
+  } else {
+    _msClear(); _deselectFreehand();
+    _selDrag = null;
+    _syncEditBtns();
+  }
+};
+
+selectTool.onMouseDrag = (event) => {
+  if (handleTraceMouseDrag(event.point)) return;
+  if (!_selDrag) return;
+  const dx = toMm(event.point.x - _selDrag.startPt.x);
+  const dy = toMm(event.point.y - _selDrag.startPt.y);
+  const { origData } = _selDrag;
+
+  _multiSel.forEach(({ kind, ref }) => {
+    const idx = _zIndexOf(ref);
+    const orig = origData[idx];
+    if (!orig) return;
+    if (kind === 'freehand') {
+      const newPts = orig.map(p => ({ x: p.x+dx, y: p.y+dy }));
+      ref.items.forEach(i => i.remove());
+      const { items, count, markCount, snappedPts } = renderPiece(newPts);
+      if (_selFreehand === ref) { items[0].strokeColor='#5bb3f5'; items[0].strokeWidth=1.5; }
+      ref.pts=newPts; ref.items=items; ref.count=count; ref.markCount=markCount; ref.snappedPts=snappedPts;
+    } else if (kind === 'rect') {
+      moveRectTo(ref, orig.x+dx, orig.y+dy);
+    } else if (kind === 'poly') {
+      ref.pts = orig.map(p => ({ x: p.x+dx, y: p.y+dy }));
+      rerenderPoly(ref);
+    } else if (kind === 'oval') {
+      ref.cx = orig.cx+dx; ref.cy = orig.cy+dy;
+      rerenderOval(ref);
+    } else if (kind === 'bezier') {
+      ref.segs = orig.map(s => ({ ...s, pt: { x: s.pt.x+dx, y: s.pt.y+dy } }));
+      rerenderBezier(ref);
+    }
+  });
+  _drawSelBox();
+};
+
+selectTool.onMouseUp = () => {
+  if (handleTraceMouseUp()) return;
+  if (_selDrag) { _selDrag = null; deduplicateCorners(); updateStatus(); }
+};
+
+selectTool.onKeyDown = (event) => {
+  if ((event.key==='delete'||event.key==='backspace') && _multiSel.length > 0) {
+    _msDeleteAll(); event.preventDefault();
+  }
+  if (event.key==='escape') { _msClear(); _deselectFreehand(); }
+};
+
 // ── Toolbar ───────────────────────────────────────────────────────────────────
 
 const hintEl = document.getElementById('hint');
 const HINTS = {
+  select:   'Click to select &nbsp;·&nbsp; Shift+click = multi-select &nbsp;·&nbsp; Drag to move &nbsp;·&nbsp; Delete to remove &nbsp;·&nbsp; Alt+click = cycle overlap',
   freehand: 'Click to place points &nbsp;·&nbsp; Shift = angle-snap &nbsp;·&nbsp; Double-click to finish &nbsp;·&nbsp; Esc to cancel',
   rect:     'Drag to draw &nbsp;·&nbsp; Click edge to toggle stitch/open &nbsp;·&nbsp; Drag corner to resize &nbsp;·&nbsp; Delete to remove',
   poly:     'Click to place vertices &nbsp;·&nbsp; Shift = angle-snap &nbsp;·&nbsp; Click start or Enter to close &nbsp;·&nbsp; Click edge to cycle &nbsp;·&nbsp; Drag vertex to reshape',
@@ -937,7 +1081,7 @@ const HINTS = {
   bezier:   'Click = corner &nbsp;·&nbsp; Click+drag = smooth curve &nbsp;·&nbsp; Shift = angle-snap &nbsp;·&nbsp; Click start or Enter to close &nbsp;·&nbsp; Backspace = undo last anchor',
 };
 
-let _activeTool = 'freehand';
+let _activeTool = 'select';
 
 function setTool(name) {
   _activeTool = name;
@@ -950,17 +1094,22 @@ document.querySelectorAll('#tool-btns [data-tool]').forEach(btn => {
   btn.addEventListener('click', () => {
     const name = btn.dataset.tool;
     if (name === _activeTool) return;
-    if (name === 'rect') {
+    if (name === 'select') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
-      _deselectFreehand(); deactivatePolyMode(); deactivateOvalMode();
+      _deselectFreehand(); deactivateRectMode(); deactivatePolyMode();
+      deactivateOvalMode(); deactivateBezierMode();
+      selectTool.activate();
+    } else if (name === 'rect') {
+      clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
+      _deselectFreehand(); deactivatePolyMode(); deactivateOvalMode(); deactivateBezierMode();
       activateRectMode();
     } else if (name === 'poly') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
-      _deselectFreehand(); deactivateRectMode(); deactivateOvalMode();
+      _deselectFreehand(); deactivateRectMode(); deactivateOvalMode(); deactivateBezierMode();
       activatePolyMode();
     } else if (name === 'trap') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
-      _deselectFreehand(); deactivateRectMode(); deactivateOvalMode();
+      _deselectFreehand(); deactivateRectMode(); deactivateOvalMode(); deactivateBezierMode();
       activateTrapMode();
     } else if (name === 'oval') {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
@@ -970,7 +1119,7 @@ document.querySelectorAll('#tool-btns [data-tool]').forEach(btn => {
       clearGhost(); if (activePath) { activePath.remove(); activePath = null; }
       _deselectFreehand(); deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode();
       activateBezierMode();
-    } else { // freehand
+    } else { // freehand (Line)
       deactivateRectMode(); deactivatePolyMode(); deactivateOvalMode(); deactivateBezierMode();
       freehandTool.activate();
     }
@@ -1360,5 +1509,5 @@ freehandTool.onKeyDown = (event) => {
   if (event.key === 'escape') cancelDraw();
 };
 
-// Freehand is the default active tool
-freehandTool.activate();
+// Select is the default active tool
+selectTool.activate();

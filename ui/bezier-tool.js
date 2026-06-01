@@ -224,6 +224,18 @@ export function getBezierStats() {
 
 export function getAllBeziers() { return _beziers; }
 
+export function rerenderBezier(bz) {
+  bz.items.forEach(i => i.remove());
+  bz.items = _renderBezier(bz);
+  if (_selected === bz) _showSelectHandles(bz);
+  _onChange();
+}
+
+export function moveBezierBy(bz, dx, dy) {
+  bz.segs = bz.segs.map(s => ({ ...s, pt: { x: s.pt.x+dx, y: s.pt.y+dy } }));
+  rerenderBezier(bz);
+}
+
 // ── Angle snap ─────────────────────────────────────────────────────────────────
 
 function _angleSnap45(fromMm, toMm_) {

@@ -222,6 +222,16 @@ export function getAllPolys()      { return _polys; }
 export function getSelectedPoly() { return _selected; }
 export function selectPoly(poly)  { _selectPoly(poly); }
 
+export function movePolyBy(poly, dx, dy) {
+  poly.pts = poly.pts.map(p => ({ x: p.x+dx, y: p.y+dy }));
+  if (poly.tpocketParams) {
+    // keep tpocketParams in sync with the new origin
+    // (params store relative dimensions; position is poly.pts[0])
+    // No change needed — tpocketVertices is called with translatePts each time
+  }
+  rerenderPoly(poly);
+}
+
 // Re-render a poly whose pts or edges have been updated externally (e.g. T-pocket param change).
 export function rerenderPoly(poly) {
   poly.items.forEach(i => i.remove());
@@ -239,35 +249,53 @@ function _edgePts(poly, i) {
 
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
-// Build the cut outline for a mixed-edge polygon:
-// - Stitched edges → their individual cut-side lines (offset outward by margin)
-// - Non-stitched edges → flush (the drawn edge itself)
-// We assemble these into a closed path approximating the cut outline.
+// Signed area of a polygon (positive = CW in screen coords where y increases down).
+function _signedArea(pts) {
+  let a = 0;
+  for (let i = 0; i < pts.length; i++) {
+    const j = (i + 1) % pts.length;
+    a += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+  }
+  return a / 2;
+}
+
+// Build the cut outline for a polygon.
+// All-stitched closed polygons use Clipper2 (handles winding automatically).
+// Mixed-edge polygons use per-edge offsets with winding-corrected outward normals.
 function _buildCutOutline(poly) {
   const { margin } = getParams();
   const n = poly.pts.length;
-  const outPts = []; // collect outward side of each edge
+
+  // All-stitched: use Clipper2 for correct winding handling
+  if (poly.edges.every(e => e === 'stitched')) {
+    const rings = offsetPolyline([...poly.pts, poly.pts[0]], margin, true);
+    return rings.length > 0 ? rings[0] : poly.pts;
+  }
+
+  // Mixed-edge: manual per-edge offset.
+  // Detect winding: positive area = CW on screen (y-down) → outward = (dy,-dx)/len
+  //                 negative area = CCW on screen          → outward = (-dy,dx)/len
+  const cw = _signedArea(poly.pts) > 0;
+  const outPts = [];
 
   for (let i = 0; i < n; i++) {
-    const a = poly.pts[i];
-    const b = poly.pts[(i + 1) % n];
+    const a = poly.pts[i], b = poly.pts[(i + 1) % n];
     const state = poly.edges[i];
+    const dx = b.x - a.x, dy = b.y - a.y;
+    const len = Math.sqrt(dx*dx + dy*dy) || 1;
+    // Outward normal differs by winding direction
+    const nx = cw ?  dy / len : -dy / len;
+    const ny = cw ? -dx / len :  dx / len;
 
     if (state === 'stitched') {
-      // Normal vector outward (perpendicular, pointing left of a→b direction)
-      const dx = b.x - a.x, dy = b.y - a.y;
-      const len = Math.sqrt(dx*dx + dy*dy) || 1;
-      const nx = -dy / len * margin, ny = dx / len * margin;
-      outPts.push({ x: a.x + nx, y: a.y + ny });
-      outPts.push({ x: b.x + nx, y: b.y + ny });
+      outPts.push({ x: a.x + nx * margin, y: a.y + ny * margin });
+      outPts.push({ x: b.x + nx * margin, y: b.y + ny * margin });
     } else {
-      // Flush — use the actual vertices
       outPts.push({ x: a.x, y: a.y });
       outPts.push({ x: b.x, y: b.y });
     }
   }
 
-  // Deduplicate consecutive identical points
   const clean = [outPts[0]];
   for (let i = 1; i < outPts.length; i++) {
     const p = outPts[i], q = clean[clean.length - 1];
@@ -303,6 +331,8 @@ function _renderTPocketCutFirst(poly) {
       closed: true,
       strokeColor: hasStitch ? '#aaa' : '#555',
       strokeWidth:  hasStitch ? 0.75 : 1,
+      strokeJoin: 'miter',   // sharp right-angle corners
+      strokeCap:  'square',
     });
     if (hasStitch) cutPath.dashArray = [4, 3];
     items.push(cutPath);
@@ -375,6 +405,7 @@ function _renderPoly(poly) {
       closed: true,
       strokeColor: hasStitch ? '#aaa' : '#555',
       strokeWidth:  hasStitch ? 0.75 : 1,
+      strokeJoin: 'miter',
     });
     if (hasStitch) cutPath.dashArray = [4, 3];
     items.push(cutPath);

@@ -120,6 +120,18 @@ export function getOvalStats() {
 
 export function getAllOvals() { return _ovals; }
 
+export function rerenderOval(oval) {
+  oval.items.forEach(i => i.remove());
+  oval.items = _renderOval(oval);
+  if (_selected === oval) _showHandles(_selected);
+  _onChange();
+}
+
+export function moveOvalBy(oval, dx, dy) {
+  oval.cx += dx; oval.cy += dy;
+  rerenderOval(oval);
+}
+
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 function _renderOval(oval) {
