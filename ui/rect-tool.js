@@ -329,7 +329,11 @@ function _renderRect(rect) {
 // ── Handles ───────────────────────────────────────────────────────────────────
 
 function _handleCenter(rect, corner) {
-  const { x, y, w, h } = rect;
+  const { margin } = getParams();
+  // noStitch rects: handles at cut outline corners (stitch rect ± margin)
+  const pad = rect.noStitch ? margin : 0;
+  const x = rect.x - pad, y = rect.y - pad;
+  const w = rect.w + 2*pad, h = rect.h + 2*pad;
   return ({
     nw: new paper.Point(px(x),     px(y)),
     ne: new paper.Point(px(x + w), px(y)),
@@ -592,8 +596,17 @@ function _rectSnapPoints(rect, { vertices, midpoints }) {
 
 // Public: lets canvas.js collect rect snap points for cross-piece snapping
 export function getRectSnapPoints(types) {
+  const { margin } = getParams();
   const pts = [];
-  for (const r of _rects) pts.push(..._rectSnapPoints(r, types));
+  for (const r of _rects) {
+    if (r.noStitch) {
+      // noStitch: snap to cut outline corners (stitch rect ± margin)
+      const sr = { x: r.x-margin, y: r.y-margin, w: r.w+2*margin, h: r.h+2*margin };
+      pts.push(..._rectSnapPoints(sr, types));
+    } else {
+      pts.push(..._rectSnapPoints(r, types));
+    }
+  }
   return pts;
 }
 

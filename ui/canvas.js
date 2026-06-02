@@ -965,6 +965,7 @@ function _msClear() {
 
 // Bounding box for a piece {kind, ref}
 function _pieceBBox({ kind, ref }) {
+  const { margin } = getParams();
   if (kind === 'freehand') {
     const pts = ref.pts;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
@@ -972,9 +973,26 @@ function _pieceBBox({ kind, ref }) {
                        maxX=Math.max(maxX,p.x); maxY=Math.max(maxY,p.y); });
     return { x: minX, y: minY, w: maxX-minX, h: maxY-minY };
   }
-  const { margin } = getParams();
-  return { x: ref.x - margin, y: ref.y - margin,
-           w: ref.w + 2*margin, h: ref.h + 2*margin };
+  if (kind === 'rect') {
+    // noStitch rects: bbox uses cut outline (stitch rect ± margin)
+    // Regular rects: same (cut outline IS the visual boundary with margin)
+    return { x: ref.x - margin, y: ref.y - margin,
+             w: ref.w + 2*margin, h: ref.h + 2*margin };
+  }
+  if (kind === 'poly' || kind === 'bezier') {
+    const pts = kind === 'bezier' ? ref.segs.map(s => s.pt) : ref.pts;
+    const xs = pts.map(p => p.x), ys = pts.map(p => p.y);
+    const pad = ref.noStitch ? 0 : margin; // noStitch: bbox is the cut outline
+    return { x: Math.min(...xs) - pad, y: Math.min(...ys) - pad,
+             w: Math.max(...xs) - Math.min(...xs) + 2*pad,
+             h: Math.max(...ys) - Math.min(...ys) + 2*pad };
+  }
+  if (kind === 'oval') {
+    const { cx, cy, rx, ry } = ref;
+    const pad = ref.noStitch ? 0 : margin;
+    return { x: cx - rx - pad, y: cy - ry - pad, w: 2*(rx+pad), h: 2*(ry+pad) };
+  }
+  return { x: 0, y: 0, w: 0, h: 0 };
 }
 
 function _drawSelBox() {
@@ -1146,8 +1164,11 @@ function _hitTestAll(point) {
       if (hit) return { kind, ref };
     } else if (kind === 'rect') {
       const { x, y, w, h } = ref;
-      if (point.x >= px(x)-8 && point.x <= px(x+w)+8 &&
-          point.y >= px(y)-8 && point.y <= px(y+h)+8) return { kind, ref };
+      const { margin } = getParams();
+      // For noStitch, hit zone covers the cut outline (stitch rect ± margin)
+      const pad = ref.noStitch ? px(margin) : 0;
+      if (point.x >= px(x)-8-pad && point.x <= px(x+w)+8+pad &&
+          point.y >= px(y)-8-pad && point.y <= px(y+h)+8+pad) return { kind, ref };
     } else if (kind === 'poly') {
       // Hit any item in the poly (stitch path or marks)
       for (const item of ref.items) {
