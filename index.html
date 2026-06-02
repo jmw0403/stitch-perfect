@@ -206,6 +206,49 @@
         </div>
 
         <div class="pane-section">
+          <div class="pane-label" style="cursor:pointer;user-select:none"
+               id="styles-toggle">▸ Element styles</div>
+          <div id="styles-panel" style="display:none">
+            <!-- rows: label | color picker | weight input -->
+            <div class="style-row">
+              <span>Stitch line</span>
+              <input type="color" data-sk="stitch" data-sp="color" value="#2c7bb6">
+              <input type="number" data-sk="stitch" data-sp="weight" value="1" min="0.2" max="4" step="0.1" class="style-num">
+            </div>
+            <div class="style-row">
+              <span>Cut outline</span>
+              <input type="color" data-sk="cut" data-sp="color" value="#aaaaaa">
+              <input type="number" data-sk="cut" data-sp="weight" value="0.75" min="0.2" max="4" step="0.1" class="style-num">
+            </div>
+            <div class="style-row">
+              <span>Solid cut</span>
+              <input type="color" data-sk="cutSolid" data-sp="color" value="#555555">
+              <input type="number" data-sk="cutSolid" data-sp="weight" value="1" min="0.2" max="4" step="0.1" class="style-num">
+            </div>
+            <div class="style-row">
+              <span>Marks</span>
+              <input type="color" data-sk="mark" data-sp="color" value="#c0392b">
+              <input type="number" data-sk="mark" data-sp="weight" value="0.8" min="0.2" max="4" step="0.1" class="style-num">
+            </div>
+            <div class="style-row">
+              <span>Selected</span>
+              <input type="color" data-sk="selStitch" data-sp="color" value="#e8860a">
+              <span style="width:42px"></span>
+            </div>
+            <div class="style-row">
+              <span>Dim labels</span>
+              <input type="color" data-sk="dim" data-sp="color" value="#4a8ab5">
+              <input type="number" data-sk="dim" data-sp="weight" value="0.8" min="0.2" max="4" step="0.1" class="style-num">
+            </div>
+            <button id="btn-reset-styles"
+                    style="margin-top:6px;width:100%;padding:4px;background:#252525;color:#888;
+                           border:1px solid #333;border-radius:4px;font-size:10px;cursor:pointer">
+              Reset to defaults
+            </button>
+          </div>
+        </div>
+
+        <div class="pane-section">
           <div class="pane-label">Snap</div>
           <div class="btn-group col-2">
             <button data-toggle="snapVertices">Corners</button>

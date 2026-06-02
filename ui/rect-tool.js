@@ -4,7 +4,7 @@
 import { placeMarks, snapToStitches } from '../engine/stitch.js';
 import { offsetPolyline } from '../engine/offset.js';
 import { getParams, getItemParams } from './controls.js';
-import { px, toMm, createMark } from './render.js';
+import { px, toMm, createMark, S } from './render.js';
 
 const HANDLE_PX   = 8;   // handle square side length in px
 const EDGE_HIT_PX = 10;  // click-to-edge tolerance in px
@@ -251,8 +251,8 @@ function _renderRect(rect) {
       const cutPath = new paper.Path({
         segments: ring.map(p => new paper.Point(px(p.x), px(p.y))),
         closed: true,
-        strokeColor: hasStitch ? '#aaa' : '#555',
-        strokeWidth:  hasStitch ? 0.75 : 1,
+        strokeColor: hasStitch ? S('cut','color','#aaa') : S('cutSolid','color','#555'),
+        strokeWidth:  hasStitch ? S('cut','weight',0.75) : S('cutSolid','weight',1),
         strokeJoin: 'miter', miterLimit: 20,
       });
       if (hasStitch) cutPath.dashArray = [4, 3];
@@ -269,8 +269,8 @@ function _renderRect(rect) {
         _layers.stitchLayer.activate();
         const sp = new paper.Path({
           segments: pts.map(p => new paper.Point(px(p.x), px(p.y))),
-          strokeColor: '#2c7bb6',
-          strokeWidth: 1,
+          strokeColor: S('stitch','color','#2c7bb6'),
+          strokeWidth:  S('stitch','weight', 1),
         });
         sp.data = { isStitch: true };
         items.push(sp);

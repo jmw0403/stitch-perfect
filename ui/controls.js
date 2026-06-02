@@ -25,6 +25,16 @@ const _state = {
   snapEdges:      false,
   // View tab — Page
   pageSize:       'none',
+  // Element styles
+  styles: {
+    stitch:    { color: '#2c7bb6', weight: 1,    dash: 'solid'  },
+    cut:       { color: '#aaaaaa', weight: 0.75, dash: '4,3'   },
+    cutSolid:  { color: '#555555', weight: 1,    dash: 'solid'  },
+    mark:      { color: '#c0392b', weight: 0.8                 },
+    selStitch: { color: '#e8860a'                              },
+    dim:       { color: '#4a8ab5', weight: 0.8                 },
+    guide:     { color: 'rgba(44,123,182,0.25)', weight: 0.75  },
+  },
   // Print tab
   printAutoTile:  true,
   printRegMarks:  true,
@@ -45,6 +55,33 @@ function _notify() {
 export function getParams() {
   return { ..._state };
 }
+
+/** Returns the current element styles (color, weight, dash per element type). */
+export function getStyles() {
+  // Deep-copy so callers can't mutate _state.styles directly
+  return JSON.parse(JSON.stringify(_state.styles));
+}
+
+/** Update one style property. key = 'stitch'|'cut'|'mark'|etc., prop = 'color'|'weight'|'dash' */
+export function setStyle(key, prop, value) {
+  if (_state.styles[key]) {
+    _state.styles[key][prop] = value;
+    _notify();
+    // Persist to localStorage
+    try { localStorage.setItem('sp-styles', JSON.stringify(_state.styles)); } catch(_) {}
+  }
+}
+
+// Load persisted styles on init
+try {
+  const saved = localStorage.getItem('sp-styles');
+  if (saved) {
+    const parsed = JSON.parse(saved);
+    Object.keys(parsed).forEach(k => {
+      if (_state.styles[k]) Object.assign(_state.styles[k], parsed[k]);
+    });
+  }
+} catch(_) {}
 
 /**
  * Return params for a specific piece, applying any per-piece visibility
@@ -184,6 +221,48 @@ export function initControls() {
     _state.printLandscape = true;
     orientLand.classList.add('active'); orientPort.classList.remove('active');
     _notify();
+  });
+
+  // ── Element styles panel ──────────────────────────────────────────────────────
+  const stylesToggle = document.getElementById('styles-toggle');
+  const stylesPanel  = document.getElementById('styles-panel');
+  stylesToggle?.addEventListener('click', () => {
+    const open = stylesPanel.style.display !== 'none';
+    stylesPanel.style.display = open ? 'none' : 'block';
+    stylesToggle.textContent = (open ? '▸' : '▾') + ' Element styles';
+  });
+
+  document.querySelectorAll('[data-sk][data-sp]').forEach(input => {
+    const key  = input.dataset.sk;
+    const prop = input.dataset.sp;
+    // Sync initial value
+    const cur = _state.styles[key]?.[prop];
+    if (cur !== undefined) input.value = cur;
+    input.addEventListener('input', () => {
+      const val = prop === 'weight' ? parseFloat(input.value) : input.value;
+      setStyle(key, prop, val);
+    });
+  });
+
+  const resetBtn = document.getElementById('btn-reset-styles');
+  resetBtn?.addEventListener('click', () => {
+    const defaults = {
+      stitch:    { color: '#2c7bb6', weight: 1,    dash: 'solid' },
+      cut:       { color: '#aaaaaa', weight: 0.75, dash: '4,3'  },
+      cutSolid:  { color: '#555555', weight: 1,    dash: 'solid' },
+      mark:      { color: '#c0392b', weight: 0.8               },
+      selStitch: { color: '#e8860a'                             },
+      dim:       { color: '#4a8ab5', weight: 0.8               },
+      guide:     { color: 'rgba(44,123,182,0.25)', weight: 0.75 },
+    };
+    _state.styles = defaults;
+    try { localStorage.removeItem('sp-styles'); } catch(_) {}
+    _notify();
+    // Resync input values
+    document.querySelectorAll('[data-sk][data-sp]').forEach(inp => {
+      const k = inp.dataset.sk, p = inp.dataset.sp;
+      if (defaults[k]?.[p] !== undefined) inp.value = defaults[k][p];
+    });
   });
 
   // ── Page size select ──────────────────────────────────────────────────────────

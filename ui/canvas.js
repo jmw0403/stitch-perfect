@@ -25,7 +25,7 @@ import { initRectTool, activateRectMode, deactivateRectMode,
          toggleSelectedEdge, copySelectedRect, pasteRect, flipSelectedRect,
          getAllRects, moveRectTo, deleteRect as _deleteRectItem,
          getRectSnapPoints } from './rect-tool.js';
-import { px, toMm, createMark } from './render.js';
+import { px, toMm, createMark, S } from './render.js';
 
 // ── Init ──────────────────────────────────────────────────────────────────────
 
@@ -314,8 +314,8 @@ function renderPiece(pts, pieceRef = null) {
     stitchLayer.activate();
     const sp = new paper.Path({
       segments: snappedPts.map(p => new paper.Point(px(p.x), px(p.y))),
-      strokeColor: '#2c7bb6',
-      strokeWidth: 1,
+      strokeColor: S('stitch','color','#2c7bb6'),
+      strokeWidth:  S('stitch','weight', 1),
     });
     sp.data = { isStitch: true };
     items.push(sp);
@@ -333,8 +333,8 @@ function renderPiece(pts, pieceRef = null) {
       items.push(new paper.Path({
         segments: ring.map(p => new paper.Point(px(p.x), px(p.y))),
         closed: true,
-        strokeColor: '#aaa',
-        strokeWidth: 0.75,
+        strokeColor: S('cut','color','#aaa'),
+        strokeWidth:  S('cut','weight', 0.75),
         dashArray: [4, 3],
       }));
     }
@@ -925,22 +925,22 @@ document.getElementById('btn-back')?.addEventListener('click', () => {
 // and marks recoloured when selected, and reverted when deselected.
 // Works by reading the data.isStitch / data.isMark tags set during rendering.
 
-const SEL_STITCH = '#e8860a'; // warm amber — distinct from blue stitch AND orange handles
-const SEL_MARK   = '#e8860a'; // same family
+const SEL_STITCH = () => S('selStitch','color','#e8860a');
+const SEL_MARK   = () => S('selStitch','color','#e8860a');
 
 function _applySelectionColor(items) {
   items?.forEach(item => {
     if (item.data?.isStitch) {
       if (!item.data._origStroke) item.data._origStroke = item.strokeColor?.toCSS?.() ?? item.strokeColor;
-      item.strokeColor = SEL_STITCH;
-      item.strokeWidth = (item.strokeWidth || 1) * 1.4; // slightly bolder
+      item.strokeColor = SEL_STITCH();
+      item.strokeWidth = (item.strokeWidth || 1) * 1.4;
       item.data._selWidthApplied = true;
     }
     if (item.data?.isMark) {
       if (!item.data._origStroke) item.data._origStroke = item.strokeColor?.toCSS?.() ?? item.strokeColor;
       if (!item.data._origFill)   item.data._origFill   = item.fillColor?.toCSS?.() ?? item.fillColor;
-      item.strokeColor = SEL_MARK;
-      if (item.fillColor && item.fillColor !== 'null') item.fillColor = SEL_MARK;
+      item.strokeColor = SEL_MARK();
+      if (item.fillColor && item.fillColor !== 'null') item.fillColor = SEL_MARK();
     }
   });
 }
