@@ -20,12 +20,14 @@ export function createMark(mark, markType) {
     const circle = new paper.Path.Circle(c, r);
     circle.strokeColor = '#c0392b';
     circle.strokeWidth = 0.8;
+    circle.data = { isMark: true };
     return circle;
   }
 
   if (markType === 'dot') {
     const circle = new paper.Path.Circle(c, r);
     circle.fillColor = '#c0392b';
+    circle.data = { isMark: true };
     return circle;
   }
 
@@ -36,7 +38,7 @@ export function createMark(mark, markType) {
   const len = px(1);
   const dx  = Math.cos(angle) * len;
   const dy  = Math.sin(angle) * len;
-  return new paper.Path({
+  const slash = new paper.Path({
     segments: [
       new paper.Point(c.x - dx, c.y - dy),
       new paper.Point(c.x + dx, c.y + dy),
@@ -44,4 +46,6 @@ export function createMark(mark, markType) {
     strokeColor: '#c0392b',
     strokeWidth: 1,
   });
+  slash.data = { isMark: true };
+  return slash;
 }

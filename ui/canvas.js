@@ -312,11 +312,13 @@ function renderPiece(pts, pieceRef = null) {
   // Stitch line (gated by showStitchLine)
   if (showStitchLine) {
     stitchLayer.activate();
-    items.push(new paper.Path({
+    const sp = new paper.Path({
       segments: snappedPts.map(p => new paper.Point(px(p.x), px(p.y))),
       strokeColor: '#2c7bb6',
       strokeWidth: 1,
-    }));
+    });
+    sp.data = { isStitch: true };
+    items.push(sp);
   }
 
   // Marks always shown (they are what matters for punching)
@@ -379,6 +381,7 @@ function redrawAll() {
   deduplicateCorners();
   updateGridOverlay();
   updatePageOverlay();
+  _updateSelectionColors(); // reapply after re-render so newly-created items get highlight
   updateStatus();
   updateSelInfo();
   _updatePrintPreview();
@@ -828,6 +831,73 @@ document.getElementById('btn-back')?.addEventListener('click', () => {
   if (_selFreehand) _zSendBack(_selFreehand);
 });
 
+// ── Universal selection highlight ────────────────────────────────────────────
+// Every piece type (rect, poly, oval, bezier, freehand) gets its stitch paths
+// and marks recoloured when selected, and reverted when deselected.
+// Works by reading the data.isStitch / data.isMark tags set during rendering.
+
+const SEL_STITCH = '#e8860a'; // warm amber — distinct from blue stitch AND orange handles
+const SEL_MARK   = '#e8860a'; // same family
+
+function _applySelectionColor(items) {
+  items?.forEach(item => {
+    if (item.data?.isStitch) {
+      if (!item.data._origStroke) item.data._origStroke = item.strokeColor?.toCSS?.() ?? item.strokeColor;
+      item.strokeColor = SEL_STITCH;
+      item.strokeWidth = (item.strokeWidth || 1) * 1.4; // slightly bolder
+      item.data._selWidthApplied = true;
+    }
+    if (item.data?.isMark) {
+      if (!item.data._origStroke) item.data._origStroke = item.strokeColor?.toCSS?.() ?? item.strokeColor;
+      if (!item.data._origFill)   item.data._origFill   = item.fillColor?.toCSS?.() ?? item.fillColor;
+      item.strokeColor = SEL_MARK;
+      if (item.fillColor && item.fillColor !== 'null') item.fillColor = SEL_MARK;
+    }
+  });
+}
+
+function _clearSelectionColor(items) {
+  items?.forEach(item => {
+    if (item.data?._origStroke !== undefined) {
+      item.strokeColor = item.data._origStroke;
+      if (item.data._selWidthApplied) {
+        item.strokeWidth = (item.strokeWidth || 1) / 1.4;
+        delete item.data._selWidthApplied;
+      }
+      delete item.data._origStroke;
+    }
+    if (item.data?._origFill !== undefined) {
+      item.fillColor = item.data._origFill;
+      delete item.data._origFill;
+    }
+  });
+}
+
+// Called whenever _multiSel changes — repaints ALL pieces to correct selection state
+function _updateSelectionColors() {
+  const selSet = new Set(_multiSel.map(s => s.ref));
+
+  // Collect all rendered items from every piece type
+  const allPieces = [
+    ...pieces.map(p => ({ ref: p, items: p.items })),
+    ...getAllRects().map(r => ({ ref: r, items: r.items })),
+    ...getAllPolys().map(p => ({ ref: p, items: p.items })),
+    ...getAllOvals().map(o => ({ ref: o, items: o.items })),
+    ...getAllBeziers().map(b => ({ ref: b, items: b.items })),
+  ];
+
+  allPieces.forEach(({ ref, items }) => {
+    if (selSet.has(ref)) {
+      _applySelectionColor(items);
+    } else {
+      _clearSelectionColor(items);
+    }
+  });
+
+  // Force paper.js to commit color changes to the canvas immediately
+  if (paper?.view) paper.view.update();
+}
+
 // ── Multi-select + Group ──────────────────────────────────────────────────────
 //
 // _multiSel  : Array<{kind:'freehand'|'rect', ref, origX, origY}>
@@ -844,6 +914,7 @@ function _msIn(ref) { return _multiSel.some(s => s.ref === ref); }
 function _msAdd(kind, ref) {
   if (!_msIn(ref)) _multiSel.push({ kind, ref });
   _drawSelBox();
+  _updateSelectionColors();
   _syncEditBtns();
 }
 
@@ -854,6 +925,8 @@ function _msRemove(ref) {
 }
 
 function _msClear() {
+  // Clear highlight colors before emptying the list
+  _multiSel.forEach(s => _clearSelectionColor(s.ref?.items));
   _multiSel = [];
   if (_selBoxItem) { _selBoxItem.remove(); _selBoxItem = null; }
   _syncEditBtns();
@@ -935,7 +1008,7 @@ function _msMoveAll(dx, dy) {
       const newPts = ref.pts.map(p => ({ x: p.x + dx, y: p.y + dy }));
       ref.items.forEach(i => i.remove());
       const { items, count, markCount, snappedPts } = renderPiece(newPts);
-      if (_selFreehand === ref) { items[0].strokeColor = '#5bb3f5'; items[0].strokeWidth = 1.5; }
+      _msIn(ref) && _applySelectionColor(items);
       ref.pts = newPts; ref.items = items; ref.count = count;
       ref.markCount = markCount; ref.snappedPts = snappedPts;
     } else {
@@ -990,16 +1063,14 @@ let _fhDragOrigPts     = null; // original pts snapshot
 function _selectFreehand(piece) {
   _deselectFreehand();
   _selFreehand = piece;
-  piece.items[0].strokeColor = '#5bb3f5';
-  piece.items[0].strokeWidth = 1.5;
+  // Visual highlight handled by _updateSelectionColors via _msAdd
   updateSelInfo();
   _syncEditBtns();
 }
 
 function _deselectFreehand() {
   if (!_selFreehand) return;
-  _selFreehand.items[0].strokeColor = '#2c7bb6';
-  _selFreehand.items[0].strokeWidth = 1;
+  // Colors reverted by _msClear/_clearSelectionColor
   _selFreehand = null;
   updateSelInfo();
   _syncEditBtns();
@@ -1079,7 +1150,7 @@ function _moveSelected(kind, ref, dx, dy) {
     const newPts = ref.pts.map(p => ({ x: p.x+dx, y: p.y+dy }));
     ref.items.forEach(i => i.remove());
     const { items, count, markCount, snappedPts } = renderPiece(newPts);
-    if (_selFreehand === ref) { items[0].strokeColor='#5bb3f5'; items[0].strokeWidth=1.5; }
+    if (_msIn(ref)) _applySelectionColor(items);
     ref.pts=newPts; ref.items=items; ref.count=count; ref.markCount=markCount; ref.snappedPts=snappedPts;
   } else if (kind === 'rect') {
     moveRectTo(ref, ref.x+dx, ref.y+dy);
@@ -1164,7 +1235,7 @@ selectTool.onMouseDrag = (event) => {
       const newPts = orig.map(p => ({ x: p.x+dx, y: p.y+dy }));
       ref.items.forEach(i => i.remove());
       const { items, count, markCount, snappedPts } = renderPiece(newPts);
-      if (_selFreehand === ref) { items[0].strokeColor='#5bb3f5'; items[0].strokeWidth=1.5; }
+      if (_msIn(ref)) _applySelectionColor(items);
       ref.pts=newPts; ref.items=items; ref.count=count; ref.markCount=markCount; ref.snappedPts=snappedPts;
     } else if (kind === 'rect') {
       moveRectTo(ref, orig.x+dx, orig.y+dy);
@@ -1337,7 +1408,7 @@ function _flipSelected(axis) {
       : { x: pt.x, y: 2 * cy - pt.y });
     p.items.forEach(item => item.remove());
     const { items, count, markCount, snappedPts } = renderPiece(flipped);
-    if (_selFreehand === p) { items[0].strokeColor = '#5bb3f5'; items[0].strokeWidth = 1.5; }
+    _msIn(p) && _applySelectionColor(items);
     p.pts = flipped; p.items = items; p.count = count;
     p.markCount = markCount; p.snappedPts = snappedPts;
     deduplicateCorners();
@@ -1703,7 +1774,7 @@ freehandTool.onMouseDrag = (event) => {
         }));
         ref.items.forEach(i => i.remove());
         const { items, count, markCount, snappedPts } = renderPiece(movedPts);
-        if (_selFreehand === ref) { items[0].strokeColor = '#5bb3f5'; items[0].strokeWidth = 1.5; }
+        _msIn(ref) && _applySelectionColor(items);
         ref.pts = movedPts; ref.items = items;
         ref.count = count; ref.markCount = markCount; ref.snappedPts = snappedPts;
       }
@@ -1713,10 +1784,7 @@ freehandTool.onMouseDrag = (event) => {
 
   _fhDragPiece.items.forEach(item => item.remove());
   const { items, count, markCount, snappedPts } = renderPiece(newPts);
-  if (_selFreehand === _fhDragPiece) {
-    items[0].strokeColor = '#5bb3f5';
-    items[0].strokeWidth = 1.5;
-  }
+  if (_msIn(_fhDragPiece)) _applySelectionColor(items);
   _fhDragPiece.items    = items;
   _fhDragPiece.count    = count;
   _fhDragPiece.markCount = markCount;

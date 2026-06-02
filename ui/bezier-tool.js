@@ -273,6 +273,7 @@ function _renderBezier(bz) {
     stitchLayer.activate();
     const seg = bz.segs;
     const pp = new paper.Path({ strokeColor: '#2c7bb6', strokeWidth: 1, fillColor: null });
+    pp.data = { isStitch: true };
     seg.forEach((s, i) => {
       const p = new paper.Point(px(s.pt.x), px(s.pt.y));
       const hi = s.hi ? new paper.Point(px(s.hi.x), px(s.hi.y)) : new paper.Point(0, 0);

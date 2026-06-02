@@ -359,11 +359,13 @@ function _renderTPocketCutFirst(poly) {
 
     if (showStitchLine) {
       _layers.stitchLayer.activate();
-      items.push(new paper.Path({
+      const sp = new paper.Path({
         segments: [new paper.Point(px(as.x), px(as.y)), new paper.Point(px(bs.x), px(bs.y))],
         strokeColor: '#2c7bb6',
         strokeWidth: 1,
-      }));
+      });
+      sp.data = { isStitch: true };
+      items.push(sp);
     }
 
     // Marks on the inset stitch line
@@ -424,11 +426,13 @@ function _renderPoly(poly) {
     if (state === 'stitched') {
       if (showStitchLine) {
         _layers.stitchLayer.activate();
-        items.push(new paper.Path({
+        const sp = new paper.Path({
           segments: [[px(a.x), px(a.y)], [px(b.x), px(b.y)]],
           strokeColor: '#2c7bb6',
           strokeWidth: 1,
-        }));
+        });
+        sp.data = { isStitch: true };
+        items.push(sp);
       }
       _layers.markLayer.activate();
       const { marks } = placeMarks([a, b], pitch);

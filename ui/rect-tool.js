@@ -264,11 +264,13 @@ function _renderRect(rect) {
     if (rect.edges[side] === 'stitched') {
       if (showStitchLine) {
         _layers.stitchLayer.activate();
-        items.push(new paper.Path({
+        const sp = new paper.Path({
           segments: pts.map(p => new paper.Point(px(p.x), px(p.y))),
           strokeColor: '#2c7bb6',
           strokeWidth: 1,
-        }));
+        });
+        sp.data = { isStitch: true };
+        items.push(sp);
       }
       _layers.markLayer.activate();
       const { marks } = placeMarks(pts, pitch);

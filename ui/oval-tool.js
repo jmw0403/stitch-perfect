@@ -166,6 +166,7 @@ function _renderOval(oval) {
       ep.strokeColor = '#2c7bb6';
       ep.strokeWidth = 1;
       ep.fillColor   = null;
+      ep.data = { isStitch: true };
       items.push(ep);
     }
 
