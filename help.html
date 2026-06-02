@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StitchPerfect — Help</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f8f7f5;
+      color: #222;
+      line-height: 1.6;
+    }
+    .page { max-width: 900px; margin: 0 auto; padding: 40px 24px 80px; }
+
+    /* Header */
+    .site-header {
+      display: flex; align-items: center; gap: 16px;
+      padding: 16px 24px; background: #1a1a1a; color: #eee;
+    }
+    .site-header h1 { font-size: 18px; font-weight: 600; }
+    .site-header a { color: #7db8e8; text-decoration: none; font-size: 14px; }
+    .site-header a:hover { text-decoration: underline; }
+    .header-back { margin-left: auto; }
+
+    /* TOC */
+    .toc { background: #fff; border: 1px solid #e5e3df; border-radius: 8px;
+           padding: 20px 24px; margin-bottom: 40px; }
+    .toc h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .06em;
+               color: #888; margin-bottom: 12px; }
+    .toc ol { padding-left: 20px; }
+    .toc li { margin-bottom: 4px; }
+    .toc a { color: #2c7bb6; text-decoration: none; font-size: 14px; }
+    .toc a:hover { text-decoration: underline; }
+
+    /* Sections */
+    h2.section { font-size: 22px; font-weight: 700; margin: 48px 0 16px;
+                  border-bottom: 2px solid #e5e3df; padding-bottom: 8px; }
+    h3 { font-size: 16px; font-weight: 600; margin: 28px 0 10px; color: #333; }
+    p { margin-bottom: 12px; font-size: 15px; color: #444; }
+
+    /* Video placeholder */
+    .video-slot {
+      background: #1a1a1a; border-radius: 8px; aspect-ratio: 16/9;
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; gap: 10px; color: #555; margin: 16px 0;
+    }
+    .video-slot .play { font-size: 36px; }
+    .video-slot .vid-title { font-size: 14px; }
+    .video-slot iframe { width: 100%; height: 100%; border: none; border-radius: 8px; }
+
+    /* Keyboard shortcut table */
+    .shortcut-grid {
+      display: grid; grid-template-columns: 180px 1fr;
+      gap: 4px 16px; margin: 12px 0;
+    }
+    .shortcut-grid dt {
+      font-family: 'Courier New', monospace; background: #eee; border-radius: 4px;
+      padding: 3px 8px; font-size: 13px; font-weight: 600; align-self: start;
+    }
+    .shortcut-grid dd { font-size: 14px; color: #555; align-self: start; padding-top: 4px; }
+
+    /* Tool cards */
+    .tool-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                  gap: 12px; margin: 16px 0; }
+    .tool-card { background: #fff; border: 1px solid #e5e3df; border-radius: 8px; padding: 14px; }
+    .tool-card .tool-name { font-weight: 700; font-size: 14px; margin-bottom: 4px; }
+    .tool-card .tool-desc { font-size: 13px; color: #666; }
+
+    /* Tip boxes */
+    .tip { background: #f0f7ff; border-left: 4px solid #2c7bb6;
+            padding: 12px 16px; border-radius: 0 6px 6px 0; margin: 16px 0; }
+    .tip strong { color: #1a5a8a; }
+
+    footer { text-align: center; color: #aaa; font-size: 13px; margin-top: 60px; }
+    footer a { color: #2c7bb6; }
+  </style>
+</head>
+<body>
+
+<header class="site-header">
+  <h1>StitchPerfect</h1>
+  <span style="color:#555;font-size:14px">Help &amp; Reference</span>
+  <a href="/" class="header-back">← Back to app</a>
+</header>
+
+<div class="page">
+
+  <!-- Table of contents -->
+  <div class="toc">
+    <h2>Contents</h2>
+    <ol>
+      <li><a href="#philosophy">The StitchPerfect philosophy</a></li>
+      <li><a href="#getting-started">Getting started — video</a></li>
+      <li><a href="#tools">Drawing tools</a></li>
+      <li><a href="#stitch">Stitch parameters</a></li>
+      <li><a href="#edges">Edge states (stitched / open / hidden)</a></li>
+      <li><a href="#tpocket">T-Pocket template</a></li>
+      <li><a href="#select">Selecting and moving objects</a></li>
+      <li><a href="#fuse">Fusing shapes</a></li>
+      <li><a href="#export">Exporting and printing</a></li>
+      <li><a href="#shortcuts">Keyboard shortcuts</a></li>
+    </ol>
+  </div>
+
+  <!-- ── Philosophy ── -->
+  <h2 class="section" id="philosophy">The StitchPerfect philosophy</h2>
+  <p>
+    Traditional leatherwork cuts the piece first, then hopes the stitches space evenly.
+    They rarely do — so the maker fudges one short stitch. That correction is visible.
+  </p>
+  <p>
+    <strong>StitchPerfect inverts the process.</strong> You set the <em>pitch</em> (distance
+    between stitch holes) and the tool adjusts the piece dimensions by a fraction of a
+    millimetre until every run lands on a whole number of stitches. That tiny adjustment
+    is invisible to the eye.
+  </p>
+  <div class="tip">
+    <strong>Rule:</strong> Move the leather, never the stitch. Pitch is sacred.
+  </div>
+
+  <!-- ── Getting started ── -->
+  <h2 class="section" id="getting-started">Getting started</h2>
+  <div class="video-slot">
+    <div class="play">▶</div>
+    <div class="vid-title">Getting started with StitchPerfect (coming soon)</div>
+  </div>
+  <p>Topics covered: what pitch is, why dimensions flex, how to read the canvas,
+     setting margin, mark type, and making your first rect.</p>
+
+  <!-- ── Tools ── -->
+  <h2 class="section" id="tools">Drawing tools</h2>
+
+  <div class="tool-grid">
+    <div class="tool-card">
+      <div class="tool-name">▷ Select</div>
+      <div class="tool-desc">Click any object to select it. Drag to move. Shift+click = multi-select. Drag empty canvas = rubber-band select.</div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-name">Line</div>
+      <div class="tool-desc">Click to place vertices. Double-click or Enter to finish. Shift = snap to 45°. Creates an open stitch line.</div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-name">Bezier</div>
+      <div class="tool-desc">Click = sharp corner. Click+drag = smooth curve (drag sets the forward handle). Click near start or Enter to close.</div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-name">Rect</div>
+      <div class="tool-desc">Drag to draw. All 4 edges stitched by default. Click any edge to cycle: stitched → open → hidden. Drag corners to resize.</div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-name">Oval</div>
+      <div class="tool-desc">Drag bounding box to draw an ellipse. Drag N/S handles to change height; E/W for width.</div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-name">Trap</div>
+      <div class="tool-desc">Drag to create a trapezoid (wider top, 20% narrower at bottom). All 4 corners are freely draggable afterwards.</div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-name">Poly</div>
+      <div class="tool-desc">Click to place vertices. Click near the first vertex or press Enter to close. Click any edge to cycle state.</div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-name">T Text</div>
+      <div class="tool-desc">Click to place a text label. Enter content when prompted. Drag to reposition.</div>
+    </div>
+    <div class="tool-card">
+      <div class="tool-name">↔ Dim</div>
+      <div class="tool-desc">Click two points to place a dimension line with arrows and a length label.</div>
+    </div>
+  </div>
+
+  <div class="video-slot">
+    <div class="play">▶</div>
+    <div class="vid-title">Drawing tools walkthrough (coming soon)</div>
+  </div>
+
+  <!-- ── Stitch params ── -->
+  <h2 class="section" id="stitch">Stitch parameters (Stitch tab)</h2>
+
+  <h3>Pitch</h3>
+  <p>Distance between adjacent stitch holes in millimetres. Matches your pricking iron.
+     Standard values: 3 / 3.38 / 3.85 / 4 / 5 / 6 mm. <strong>Never changes to fit geometry
+     — geometry changes to fit pitch.</strong></p>
+
+  <h3>Margin</h3>
+  <p>Distance from the cut edge to the stitch line. Typical leatherwork uses 3–4 mm.
+     Adjust with the slider (1–15 mm, half-mm steps).</p>
+
+  <h3>Mark type</h3>
+  <p>How each stitch position is rendered:</p>
+  <ul style="margin:8px 0 8px 20px;font-size:14px;color:#444">
+    <li><strong>Hole ○</strong> — open circle (1 mm diameter)</li>
+    <li><strong>Dot ●</strong> — filled dot</li>
+    <li><strong>/ Slash</strong> — 2 mm line at +45° to the local edge direction</li>
+    <li><strong>\ Slash</strong> — 2 mm line at −45° to the local edge direction</li>
+  </ul>
+  <p>Slash marks rotate automatically to follow the curve — they always sit at the correct
+     angle relative to the stitch line, even on curves and corners.</p>
+
+  <!-- ── Edge states ── -->
+  <h2 class="section" id="edges">Edge states</h2>
+  <p>Click any edge (on a Rect, Poly, or T-Pocket) to cycle through three states:</p>
+  <div class="tool-grid">
+    <div class="tool-card" style="border-left:4px solid #2c7bb6">
+      <div class="tool-name" style="color:#2c7bb6">Stitched (blue)</div>
+      <div class="tool-desc">Stitch marks placed. Cut outline offset outward by margin.</div>
+    </div>
+    <div class="tool-card" style="border-left:4px solid #888">
+      <div class="tool-name" style="color:#888">Open (gray dashed)</div>
+      <div class="tool-desc">No stitch marks. Cut outline sits flush at the drawn edge. Leather is there; no holes punched.</div>
+    </div>
+    <div class="tool-card" style="border-left:4px solid #333">
+      <div class="tool-name" style="color:#555">Hidden (invisible)</div>
+      <div class="tool-desc">No line drawn. The cut outline still closes the piece. Use for pocket openings or fold edges.</div>
+    </div>
+  </div>
+
+  <!-- ── T-Pocket ── -->
+  <h2 class="section" id="tpocket">T-Pocket template</h2>
+  <div class="video-slot">
+    <div class="play">▶</div>
+    <div class="vid-title">T-Pocket template — drop, resize, and mirror (coming soon)</div>
+  </div>
+  <p>Click <strong>T-Pocket</strong> in the Templates section to drop a card-slot piece
+     with the correct stitch states pre-set (top hidden, ears stitched, angled sides open,
+     bottom seam stitched).</p>
+  <p>Five orange handles control the five dimensions. The angled sides always auto-adjust:</p>
+  <ul style="margin:8px 0 8px 20px;font-size:14px;color:#444">
+    <li><strong>Left edge handle</strong> ↔ — changes total width (symmetric)</li>
+    <li><strong>Top-centre handle</strong> ↕ — changes T-bar height (ear height)</li>
+    <li><strong>Inner shoulder handle</strong> ↔ — changes T-tab width (mirrors right)</li>
+    <li><strong>Bottom-left corner</strong> ↔ — changes base seam width (symmetric)</li>
+    <li><strong>Bottom-centre handle</strong> ↕ — changes total height</li>
+  </ul>
+  <div class="tip">
+    <strong>Tip:</strong> Use Flip H (Edit section) to mirror the T-Pocket for the right-hand side of a bifold.
+  </div>
+
+  <!-- ── Select and move ── -->
+  <h2 class="section" id="select">Selecting and moving objects</h2>
+  <p>The <strong>Select tool (▷)</strong> is the default. It works on all object types at once.</p>
+  <ul style="margin:8px 0 16px 20px;font-size:14px;color:#444">
+    <li><strong>Click</strong> a piece → select it (orange highlight box)</li>
+    <li><strong>Shift+click</strong> → add to / remove from selection</li>
+    <li><strong>Drag on empty canvas</strong> → rubber-band select (selects all fully enclosed pieces)</li>
+    <li><strong>Drag a selected piece</strong> → move it</li>
+    <li><strong>Alt+click</strong> → cycle through overlapping pieces (top → bottom → top)</li>
+    <li><strong>Delete</strong> → remove selected pieces</li>
+  </ul>
+
+  <!-- ── Fusing shapes ── -->
+  <h2 class="section" id="fuse">Fusing shapes (Fuse button)</h2>
+  <div class="video-slot">
+    <div class="play">▶</div>
+    <div class="vid-title">Building a T-pocket from a Trap + Rect (coming soon)</div>
+  </div>
+  <p>To combine two shapes into one (e.g. a Rect on top of a Trap to make a T-shaped piece):</p>
+  <ol style="margin:8px 0 16px 20px;font-size:14px;color:#444">
+    <li>Draw both shapes so they overlap at the shared edge</li>
+    <li>Select both (Shift+click or rubber-band)</li>
+    <li>Click <strong>⬡ Fuse shapes</strong> in the Edit section</li>
+    <li>The internal shared edge is removed; a new combined polygon is created</li>
+    <li>Click individual edges of the result to set stitched / open / hidden states</li>
+  </ol>
+
+  <!-- ── Export ── -->
+  <h2 class="section" id="export">Exporting and printing</h2>
+  <p>Open the <strong>Print tab</strong> to configure export settings.</p>
+  <ul style="margin:8px 0 16px 20px;font-size:14px;color:#444">
+    <li><strong>Download SVG</strong> — single-file vector export. 1 mm in the file = 1 mm on paper. Print at 100% scale.</li>
+    <li><strong>Download tiled pages</strong> — splits the layout across A4/Letter/A3 pages with overlap margins and registration crosshairs. Print each page, cut on the dashed line, tape together.</li>
+    <li><strong>Scale bar</strong> — every exported SVG includes a 50 mm reference bar. Measure it after printing to confirm scale is correct.</li>
+  </ul>
+  <div class="tip">
+    <strong>Printer calibration:</strong> Print the SVG at 100% (no "fit to page"). Measure the
+    50 mm scale bar with a ruler. If it's not 50 mm, adjust your printer's scaling setting.
+  </div>
+
+  <!-- ── Keyboard shortcuts ── -->
+  <h2 class="section" id="shortcuts">Keyboard shortcuts</h2>
+
+  <h3>Drawing</h3>
+  <dl class="shortcut-grid">
+    <dt>Enter</dt><dd>Finish a Line or close a Poly / Bezier</dd>
+    <dt>Backspace</dt><dd>Remove the last-placed vertex (while drawing)</dd>
+    <dt>Escape</dt><dd>Cancel current draw / deselect</dd>
+    <dt>Shift + click</dt><dd>Angle-snap to 45° increments (Line, Poly, Bezier)</dd>
+  </dl>
+
+  <h3>Selection</h3>
+  <dl class="shortcut-grid">
+    <dt>Shift + click</dt><dd>Add / remove from multi-select</dd>
+    <dt>Alt + click</dt><dd>Cycle through overlapping objects</dd>
+    <dt>Delete</dt><dd>Remove selected objects</dd>
+  </dl>
+
+  <h3>Edit</h3>
+  <dl class="shortcut-grid">
+    <dt>Ctrl + C</dt><dd>Copy selected piece</dd>
+    <dt>Ctrl + V</dt><dd>Paste (offset by one pitch)</dd>
+    <dt>Ctrl + D</dt><dd>Duplicate (copy + paste in one step)</dd>
+    <dt>Ctrl + G</dt><dd>Group selected pieces</dd>
+    <dt>Ctrl + Shift + G</dt><dd>Ungroup</dd>
+  </dl>
+
+  <h3>View</h3>
+  <dl class="shortcut-grid">
+    <dt>Scroll wheel</dt><dd>Zoom in / out</dd>
+    <dt>Middle-drag</dt><dd>Pan canvas</dd>
+  </dl>
+
+</div><!-- /page -->
+
+<footer>
+  <p>StitchPerfect &nbsp;·&nbsp; <a href="https://stitchperfect.app">stitchperfect.app</a>
+     &nbsp;·&nbsp; <a href="https://github.com/jmw0403/stitch-perfect">GitHub</a></p>
+</footer>
+
+</body>
+</html>
