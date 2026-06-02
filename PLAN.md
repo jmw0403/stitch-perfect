@@ -69,6 +69,119 @@ mating piece is adjusted by the same rule, parts still fit each other.
 
 ## Build Order — Remaining Work
 
+### Phase 3.8 — Object Consistency + Visual Control *(NEW — 2026-06-02)*
+
+Five systemic issues identified from live testing. Must be fixed before feature work continues.
+
+---
+
+#### 3.8.1 — Universal selection highlight (all object types)
+
+**Problem:** Only the Rect shows a color change on selection (orange bounding box).
+T-Pocket, Oval, Poly, Bezier, and Freehand line get the bounding box but their stitch
+lines and marks do NOT change color — it's impossible to tell at a glance which piece
+is selected when they overlap.
+
+**Fix:**
+- [ ] When any object is selected (via Select tool OR individual tool), its stitch line
+      changes to a bright selection color (suggested: `#f39c12` orange or `#5bb3f5` light blue)
+- [ ] All object types: rect edges, poly edges, oval ellipse, bezier path, freehand line
+- [ ] Marks on the selected piece get a selection tint (or a slightly larger radius)
+- [ ] Cut outline on selected piece gets a visible highlight stroke
+- [ ] When deselected, all colors revert to their normal (or per-piece override) values
+- [ ] Test matrix: Rect, Poly, T-Pocket, Oval, Trap, Bezier, Freehand — each must visually
+      confirm selection
+
+---
+
+#### 3.8.2 — Per-object stitch settings (pitch, margin, mark type)
+
+**Problem:** Stitch pitch, margin, and mark type currently apply to ALL objects globally.
+Leather patterns often need different pitch or margin per piece — e.g. a gusset strip
+at 3mm pitch, card pockets at 4mm, decorative accent at 5mm.
+
+**Fix (extends existing `piece.vis` override system):**
+- [ ] Add `piece.settings = { pitch: null, margin: null, markType: null }` to every piece type
+      (null = inherit global)
+- [ ] Piece tab "Override" section extended: when enabled, shows pitch / margin / mark type
+      controls for that piece
+- [ ] `getItemParams(piece)` already merges vis; extend it to also merge settings
+- [ ] Pieces with per-piece pitch are pitch-snapped independently
+- [ ] SVG export respects per-piece settings
+- [ ] Status bar shows aggregate counts correctly even with mixed pitches
+
+---
+
+#### 3.8.3 — Pure cut-outline pieces (no-stitch mode)
+
+**Problem:** There is currently no clean way to create a pattern piece that is purely a
+cut outline with no stitch holes. Setting all edges to 'hidden' works visually but the
+piece still participates in stitch counts and the cut line remains dashed.
+
+**Use cases:**
+- Wallet outer body (no external stitching)
+- Decorative overlays
+- Construction reference shapes
+
+**Fix:**
+- [ ] Per-piece `noStitch: false` boolean flag
+- [ ] When `noStitch = true`:
+  - No marks rendered on any edge
+  - Cut outline is drawn as a **solid** line (not dashed) — this IS the final cut piece
+  - Piece still shows correctly in exported SVG
+  - Stitch counts exclude this piece entirely
+- [ ] Piece tab shows "No stitch (cut only)" toggle that sets `noStitch`
+- [ ] Stitch can be manually re-added later by toggling off `noStitch` and setting edges
+
+---
+
+#### 3.8.4 — Snap and reshape points on stitch-free objects
+
+**Problem:** When a piece has no stitch lines (all edges hidden or `noStitch = true`),
+the only visual reference is the cut outline. But snap points and reshape handles rely on
+the stitch geometry. This must work for stitch-free pieces too.
+
+**Fix:**
+- [ ] Snap-to-corners (`snapVertices`): uses the polygon/rect/oval BOUNDARY vertices, not
+      the stitch line endpoints — this is correct for stitch-free pieces
+- [ ] Snap-to-midpoints: uses the midpoints of each CUT outline edge
+- [ ] Reshape handles (poly vertex handles, oval cardinal handles, etc.) remain visible
+      even when the piece has no stitch lines
+- [ ] Centre-guide crosshairs still appear on stitch-free selected pieces
+- [ ] The `_pieceBBox` function uses cut outline dimensions for stitch-free pieces
+
+---
+
+#### 3.8.5 — Element visual style settings (color, weight, line type per element)
+
+**Problem:** All visual styling (stitch line color, cut line color, mark color, dash
+patterns) is hard-coded in the render functions. Users cannot change these to match
+their workflow or print preferences.
+
+**Proposed UI:** A "Styles" section in the View tab (or a dedicated modal / settings panel):
+
+| Element | Configurable properties |
+|---|---|
+| Stitch line | Color, stroke weight, solid/dashed |
+| Cut outline | Color, stroke weight, dash pattern (dash size + gap) |
+| Hole marks | Color, diameter |
+| Dot marks | Color, diameter |
+| Slash marks | Color, stroke weight |
+| Dimension labels | Color, font size |
+| Selection highlight | Color |
+| Grid | Color, opacity |
+| Centre guides | Color, opacity |
+
+**Implementation:**
+- [ ] `_styles` object in controls.js stores all style defaults
+- [ ] "Styles" tab or collapsible section in View tab with color pickers and number inputs
+- [ ] Render functions read from `_styles` instead of hard-coded hex values
+- [ ] `getStyles()` exported; render functions call it
+- [ ] Styles saved to localStorage so they persist across sessions
+- [ ] "Reset to defaults" button
+
+---
+
 ### Phase 3.7 — Remaining Workflow Improvements *(partial — see accomplished above)*
 
 **Per-object visibility toggles** *(NEW — requested 2026-06-01)*
