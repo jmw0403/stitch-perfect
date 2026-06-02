@@ -207,6 +207,7 @@ export function getRectStats() {
   const { pitch } = getParams();
   let stitches = 0, marks = 0;
   _rects.forEach(rect => {
+    if (rect.noStitch) return;
     for (const side of ['top', 'right', 'bottom', 'left']) {
       if (rect.edges[side] !== 'stitched') continue;
       const { count } = placeMarks(_edgePts(rect, side), pitch);
@@ -232,7 +233,9 @@ function _edgePts(rect, side) {
 // ── Rendering ─────────────────────────────────────────────────────────────────
 
 function _renderRect(rect) {
-  const { pitch, margin, markType, showStitchLine, showCutOutline } = getItemParams(rect);
+  const itemP = getItemParams(rect);
+  const { pitch, margin, markType, showStitchLine, showCutOutline } = itemP;
+  const forceNoStitch = !!itemP._noStitch; // pure cut-only piece
   const { x, y, w, h } = rect;
   const items = [];
 
@@ -241,8 +244,8 @@ function _renderRect(rect) {
     const closedPts = [
       { x, y }, { x: x + w, y }, { x: x + w, y: y + h }, { x, y: y + h }, { x, y },
     ];
-    // No stitches → solid cut line; has stitches → dashed ghost
-    const hasStitch = Object.values(rect.edges).some(e => e === 'stitched');
+    // noStitch mode OR no stitched edges → solid cut line; otherwise dashed ghost
+    const hasStitch = !forceNoStitch && Object.values(rect.edges).some(e => e === 'stitched');
     _layers.cutLayer.activate();
     for (const ring of offsetPolyline(closedPts, margin, true, { joinType: 'miter' })) {
       const cutPath = new paper.Path({

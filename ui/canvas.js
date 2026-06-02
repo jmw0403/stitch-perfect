@@ -543,6 +543,8 @@ function updateSelInfo() {
     const liveRect = getSelectedRectRef()
       || _multiSel.find(s => s.kind === 'rect')?.ref;
     if (liveRect) {
+      el.insertAdjacentHTML('beforeend', _noStitchToggleHtml(liveRect));
+      _wireNoStitch(el, liveRect, () => redrawAll());
       el.insertAdjacentHTML('beforeend', _visOverrideHtml(liveRect));
       _wireVisOverride(el, liveRect, () => redrawAll());
     }
@@ -617,6 +619,10 @@ function updateSelInfo() {
           </div>
         </div>`;
     }
+    if (!selPoly.tpocketParams) { // T-pockets can't be no-stitch (they always need at least one seam)
+      el.insertAdjacentHTML('beforeend', _noStitchToggleHtml(selPoly));
+      _wireNoStitch(el, selPoly, () => redrawAll());
+    }
     el.insertAdjacentHTML('beforeend', _visOverrideHtml(selPoly));
     _wireVisOverride(el, selPoly, () => redrawAll());
     return;
@@ -652,6 +658,31 @@ function updateSelInfo() {
 }
 
 // ── Per-piece visibility override UI ─────────────────────────────────────────
+
+// ── No-stitch toggle ──────────────────────────────────────────────────────────
+
+function _noStitchToggleHtml(piece) {
+  const on = !!piece.noStitch;
+  return `
+    <div class="piece-section" style="border-top:1px solid #222;padding-top:10px">
+      <div class="toggle-row">
+        <span style="font-weight:600;font-size:12px">Cut only (no stitches)</span>
+        <button class="toggle-switch ${on?'active':''}" id="pi-nostitch"
+                title="Pure cut-outline piece — no stitch marks, solid boundary line"></button>
+      </div>
+      <div style="font-size:10px;color:#555;margin-top:2px">
+        ${on ? 'Solid cut boundary · no marks · excluded from stitch count' : 'Stitches active'}
+      </div>
+    </div>`;
+}
+
+function _wireNoStitch(el, piece, rerenderFn) {
+  el.querySelector('#pi-nostitch')?.addEventListener('click', () => {
+    piece.noStitch = !piece.noStitch;
+    rerenderFn();
+    updateSelInfo();
+  });
+}
 
 function _visOverrideHtml(piece) {
   const v = piece.vis;

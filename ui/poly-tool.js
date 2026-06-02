@@ -201,6 +201,7 @@ export function getPolyStats() {
   const { pitch, margin } = getParams();
   let stitches = 0, marks = 0;
   _polys.forEach(poly => {
+    if (poly.noStitch) return; // excluded from stitch counts
     poly.edges.forEach((state, i) => {
       if (state !== 'stitched') return;
       const [a, b] = _edgePts(poly, i);
@@ -398,14 +399,16 @@ function _renderPoly(poly) {
   // T-pocket: pts = cut outline, stitch inset by margin (cut-first model)
   if (poly.tpocketParams) return _renderTPocketCutFirst(poly);
 
-  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = getItemParams(poly);
+  const itemP = getItemParams(poly);
+  const { pitch, margin, markType, showStitchLine, showCutOutline, showDimensions } = itemP;
+  const forceNoStitch = !!itemP._noStitch;
   const items = [];
   const n = poly.pts.length;
 
   // Cut outline
   if (showCutOutline) {
     const cutPts = _buildCutOutline(poly);
-    const hasStitch = poly.edges.some(e => e === 'stitched');
+    const hasStitch = !forceNoStitch && poly.edges.some(e => e === 'stitched');
     _layers.cutLayer.activate();
     const cutPath = new paper.Path({
       segments: cutPts.map(p => new paper.Point(px(p.x), px(p.y))),
@@ -423,7 +426,7 @@ function _renderPoly(poly) {
     const [a, b] = _edgePts(poly, i);
     const state  = poly.edges[i];
 
-    if (state === 'stitched') {
+    if (state === 'stitched' && !forceNoStitch) {
       if (showStitchLine) {
         _layers.stitchLayer.activate();
         const sp = new paper.Path({

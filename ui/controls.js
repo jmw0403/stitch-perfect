@@ -54,6 +54,18 @@ export function getParams() {
 export function getItemParams(piece) {
   const p = getParams();
   const vis = piece?.vis;
+
+  // noStitch = pure cut-outline piece — no marks, no stitch lines, solid cut boundary
+  if (piece?.noStitch) {
+    return {
+      ...p,
+      showStitchLine: false,
+      showCutOutline: vis?.cut !== undefined ? vis.cut : true,
+      showDimensions: vis?.dims !== undefined ? vis.dims : p.showDimensions,
+      _noStitch: true,  // tells render functions to draw solid cut line
+    };
+  }
+
   if (!vis) return p;
   return {
     ...p,
