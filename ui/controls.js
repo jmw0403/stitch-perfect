@@ -66,12 +66,21 @@ export function getItemParams(piece) {
     };
   }
 
-  if (!vis) return p;
-  return {
+  // Apply per-piece stitch setting overrides (pitch, margin, markType)
+  const st = piece?.stitchOverride; // { pitch, margin, markType } — any can be null (= global)
+  const base = {
     ...p,
-    showStitchLine: vis.stitch !== undefined ? vis.stitch : p.showStitchLine,
-    showCutOutline: vis.cut    !== undefined ? vis.cut    : p.showCutOutline,
-    showDimensions: vis.dims   !== undefined ? vis.dims   : p.showDimensions,
+    ...(st?.pitch    !== undefined && st.pitch    !== null ? { pitch:    st.pitch    } : {}),
+    ...(st?.margin   !== undefined && st.margin   !== null ? { margin:   st.margin   } : {}),
+    ...(st?.markType !== undefined && st.markType !== null ? { markType: st.markType } : {}),
+  };
+
+  if (!vis) return base;
+  return {
+    ...base,
+    showStitchLine: vis.stitch !== undefined ? vis.stitch : base.showStitchLine,
+    showCutOutline: vis.cut    !== undefined ? vis.cut    : base.showCutOutline,
+    showDimensions: vis.dims   !== undefined ? vis.dims   : base.showDimensions,
   };
 }
 

@@ -198,10 +198,10 @@ export function redrawAllPolys() {
 }
 
 export function getPolyStats() {
-  const { pitch, margin } = getParams();
   let stitches = 0, marks = 0;
   _polys.forEach(poly => {
     if (poly.noStitch) return; // excluded from stitch counts
+    const { pitch, margin } = getItemParams(poly); // respects per-piece overrides
     poly.edges.forEach((state, i) => {
       if (state !== 'stitched') return;
       const [a, b] = _edgePts(poly, i);

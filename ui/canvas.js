@@ -685,26 +685,50 @@ function _wireNoStitch(el, piece, rerenderFn) {
 }
 
 function _visOverrideHtml(piece) {
-  const v = piece.vis;
-  const p = getParams();
-  const on  = !!v;
-  const st  = on ? v.stitch : p.showStitchLine;
-  const cut = on ? v.cut    : p.showCutOutline;
-  const dim = on ? v.dims   : p.showDimensions;
+  const v  = piece.vis;
+  const so = piece.stitchOverride;
+  const p  = getParams();
+  const on  = !!(v || so);
+  const st  = v ? (v.stitch ?? p.showStitchLine) : p.showStitchLine;
+  const cut = v ? (v.cut    ?? p.showCutOutline)  : p.showCutOutline;
+  const dim = v ? (v.dims   ?? p.showDimensions)  : p.showDimensions;
+  const curPitch    = so?.pitch    ?? p.pitch;
+  const curMargin   = so?.margin   ?? p.margin;
+  const curMarkType = so?.markType ?? p.markType;
+  const pitchOpts   = [3, 3.38, 3.85, 4, 5, 6];
+  const markOpts    = [['hole','Hole ○'],['dot','Dot ●'],['slash-fwd','/ Slash'],['slash-back','\\ Slash']];
+
   return `
     <div class="piece-section">
-      <div class="piece-section-label">Visibility override</div>
+      <div class="piece-section-label">Override settings</div>
       <div class="toggle-row">
         <span>Override global</span>
         <button class="toggle-switch ${on?'active':''}" id="pi-vis-ov"></button>
       </div>
       <div id="pi-vis-sub" style="${on?'':'display:none'}">
+        <div style="font-size:10px;color:#555;margin:4px 0 4px 0">Visibility</div>
         <div class="toggle-row"><span style="padding-left:8px;font-size:11px">Stitch line</span>
           <button class="toggle-switch ${st?'active':''}" id="pi-vis-st"></button></div>
         <div class="toggle-row"><span style="padding-left:8px;font-size:11px">Cut outline</span>
           <button class="toggle-switch ${cut?'active':''}" id="pi-vis-cut"></button></div>
         <div class="toggle-row"><span style="padding-left:8px;font-size:11px">Dimensions</span>
           <button class="toggle-switch ${dim?'active':''}" id="pi-vis-dim"></button></div>
+        <div style="font-size:10px;color:#555;margin:8px 0 4px 0">Stitch settings</div>
+        <div class="pane-label" style="margin-bottom:3px">Pitch</div>
+        <div class="btn-group" id="pi-pitch-btns">
+          ${pitchOpts.map(v2=>`<button data-ppitch="${v2}" class="${curPitch===v2?'active':''}"
+            style="font-size:10px;padding:3px 2px">${v2}</button>`).join('')}
+        </div>
+        <div class="pane-label" style="margin:6px 0 2px">
+          Margin &thinsp;<span id="pi-margin-val">${curMargin.toFixed(1)}</span> mm
+        </div>
+        <input type="range" id="pi-margin-range" min="1" max="15" step="0.5" value="${curMargin}">
+        <div class="pane-label" style="margin:6px 0 3px">Mark type</div>
+        <div class="btn-group col-2" id="pi-mark-btns">
+          ${markOpts.map(([k,lbl])=>`<button data-pmark="${k}"
+            class="${curMarkType===k?'active':''}"
+            style="font-size:10px;padding:3px">${lbl}</button>`).join('')}
+        </div>
       </div>
     </div>`;
 }
@@ -715,11 +739,14 @@ function _wireVisOverride(el, piece, rerenderFn) {
   if (!ovBtn) return;
 
   ovBtn.addEventListener('click', () => {
-    if (piece.vis) {
+    const hasOverride = !!(piece.vis || piece.stitchOverride);
+    if (hasOverride) {
       piece.vis = null;
+      piece.stitchOverride = null;
     } else {
       const p = getParams();
       piece.vis = { stitch: p.showStitchLine, cut: p.showCutOutline, dims: p.showDimensions };
+      piece.stitchOverride = { pitch: p.pitch, margin: p.margin, markType: p.markType };
     }
     rerenderFn();
     updateSelInfo();
@@ -729,8 +756,39 @@ function _wireVisOverride(el, piece, rerenderFn) {
     el.querySelector(id)?.addEventListener('click', () => {
       if (!piece.vis) return;
       piece.vis[key] = !piece.vis[key];
+      rerenderFn(); updateSelInfo();
+    });
+  });
+
+  // Per-piece pitch buttons
+  el.querySelectorAll('#pi-pitch-btns [data-ppitch]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!piece.stitchOverride) piece.stitchOverride = {};
+      piece.stitchOverride.pitch = parseFloat(btn.dataset.ppitch);
+      el.querySelectorAll('#pi-pitch-btns [data-ppitch]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      rerenderFn(); updateSelInfo();
+    });
+  });
+
+  // Per-piece margin slider
+  const mrEl = el.querySelector('#pi-margin-range');
+  const mvEl = el.querySelector('#pi-margin-val');
+  mrEl?.addEventListener('input', () => {
+    if (!piece.stitchOverride) piece.stitchOverride = {};
+    piece.stitchOverride.margin = parseFloat(mrEl.value);
+    if (mvEl) mvEl.textContent = parseFloat(mrEl.value).toFixed(1);
+    rerenderFn();
+  });
+
+  // Per-piece mark type buttons
+  el.querySelectorAll('#pi-mark-btns [data-pmark]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      if (!piece.stitchOverride) piece.stitchOverride = {};
+      piece.stitchOverride.markType = btn.dataset.pmark;
+      el.querySelectorAll('#pi-mark-btns [data-pmark]').forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
       rerenderFn();
-      updateSelInfo();
     });
   });
 }

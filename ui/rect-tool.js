@@ -204,10 +204,10 @@ export function flipSelectedRect(axis) {
 }
 
 export function getRectStats() {
-  const { pitch } = getParams();
   let stitches = 0, marks = 0;
   _rects.forEach(rect => {
     if (rect.noStitch) return;
+    const { pitch } = getItemParams(rect); // respects per-piece pitch override
     for (const side of ['top', 'right', 'bottom', 'left']) {
       if (rect.edges[side] !== 'stitched') continue;
       const { count } = placeMarks(_edgePts(rect, side), pitch);
